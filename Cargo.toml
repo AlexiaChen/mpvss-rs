@@ -1,0 +1,16 @@
+[package]
+authors = ["MathxH Chen <brainfvck@foxmail.com>"]
+edition = "2018"
+name = "mpvss-rs"
+version = "0.0.1"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "mpvss"
+path = "src/lib.rs"
+
+[dependencies]
+gmp-mpfr-sys = "1.4"
+num-bigint = "0.2.6"
+num-primes = "0.1.1"
