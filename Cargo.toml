@@ -12,5 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 gmp-mpfr-sys = "1.4"
-num-bigint = "0.2.6"
+num-bigint = {version = "0.2.6", features = ["rand"]}
+num-integer = "0.1.44"
 num-primes = "0.1.1"
+rand = "0.5.6"
