@@ -58,6 +58,13 @@ impl MPVSS {
         }
         priv_key
     }
+
+    /// generate public key from private key
+    /// P = G^k over the Group of the order q
+    pub fn generate_public_key(&self, priv_key: &BigUint) -> BigUint {
+        // publicKey = G^privKey mod q
+        self.G.modpow(priv_key, &self.q)
+    }
 }
 
 #[cfg(test)]
