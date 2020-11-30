@@ -11,7 +11,7 @@ pub struct Polynomial {
 }
 
 impl Polynomial {
-    /// Create null Polynomial instance
+    /// Create empty Polynomial instance
     pub fn new() -> Self {
         return Polynomial {
             coefficients: Vec::new(),
