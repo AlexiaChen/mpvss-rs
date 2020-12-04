@@ -1,3 +1,7 @@
+// Copyright 2020 The MPVSS Authors.
+//
+// Code is licensed under AGPL License, Version 3.0.
+
 use num_bigint::{BigUint, RandBigInt};
 use num_traits::pow::Pow;
 use std::clone::Clone;

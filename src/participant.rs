@@ -1,3 +1,7 @@
+// Copyright 2020 The MPVSS Authors.
+//
+// Code is licensed under AGPL License, Version 3.0.
+
 use crate::mpvss::MPVSS;
 use crate::sharebox::DistributionSharesBox;
 use crate::sharebox::ShareBox;

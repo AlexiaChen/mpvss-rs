@@ -1,3 +1,7 @@
+// Copyright 2020 The MPVSS Authors.
+//
+// Code is licensed under AGPL License, Version 3.0.
+
 #![allow(non_snake_case)]
 
 use num_bigint::{BigUint, RandBigInt, ToBigUint};
