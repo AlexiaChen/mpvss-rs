@@ -1,6 +1,6 @@
 # MPVSS - A Simply Publicly Verifiable Secret Sharing Library
 
-The library implements a simple PVSS scheme in Rust. The algorithm is based on "A Simple Publicly Verifiable Secret Sharing Scheme and its Application to Electronic Voting" by Berry Schoenmakers.
+The library implements a simple PVSS scheme in Rust.
 
 ## What is PVSS?
 
@@ -56,3 +56,18 @@ Once a participant collected at least `threshold` shares the secret can be recon
 
 ```
 
+## References:
+
+- Berry Schoenmakers. [A Simple Publicly Verifiable Secret Sharing Scheme and its Application to Electronic Voting](https://www.win.tue.nl/~berry/papers/crypto99.pdf)
+
+- Adi Shamir. [How to share a secret](http://users.cms.caltech.edu/~vidick/teaching/101_crypto/Shamir1979.pdf)
+
+- Tal Rabin. [Verifiable Secret Sharing and Multiparty Protocols with Honest Majority](https://www.cs.umd.edu/users/gasarch/TOPICS/secretsharing/rabinVSS.pdf)
+
+- Markus Stadler. [Publicly Verifiable Secret Sharing](https://link.springer.com/content/pdf/10.1007%2F3-540-68339-9_17.pdf)
+
+- bitcoinwiki-org. [Publicly Verifiable Secret Sharing](https://en.bitcoinwiki.org/wiki/Publicly_Verifiable_Secret_Sharing)
+
+- crypto-stackexchange. [What is a Pedersen commitment?](https://crypto.stackexchange.com/questions/64437/what-is-a-pedersen-commitment)
+
+- Torben Pryds Pedersen. [Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing](https://link.springer.com/content/pdf/10.1007%2F3-540-46766-1_9.pdf)
