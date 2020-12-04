@@ -1,7 +1,10 @@
 use crate::mpvss::MPVSS;
+use crate::sharebox::DistributionSharesBox;
+use crate::sharebox::ShareBox;
 use num_bigint::BigUint;
 use num_traits::identities::Zero;
 use std::clone::Clone;
+use std::option::Option;
 
 /// A participant represents one party in the secret sharing scheme. The participant can share a secret among a group of other participants and it is then called the "dealer".
 /// The receiving participants that receive a part of the secret can use it to reconstruct the secret Therefore the partticipants need to collaborate and exchange their parts.
@@ -28,11 +31,11 @@ impl Participant {
         self.publickey = self.mpvss.generate_public_key(&self.publickey);
     }
 
-    pub fn distribute() -> () {
-        ()
+    pub fn distribute() -> DistributionSharesBox {
+        DistributionSharesBox::new()
     }
 
-    pub fn extract_share() -> () {
-        ()
+    pub fn extract_share() -> Option<ShareBox> {
+        None
     }
 }
