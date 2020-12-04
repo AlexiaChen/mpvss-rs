@@ -9,6 +9,8 @@ use std::vec::Vec;
 /// degree is k - 1
 /// s = P(0) = a_0
 /// s_i = P(i)
+
+#[derive(Debug)]
 pub struct Polynomial {
     pub coefficients: Vec<BigUint>,
 }

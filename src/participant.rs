@@ -1,6 +1,7 @@
 use crate::mpvss::MPVSS;
 use num_bigint::BigUint;
 
+#[derive(Debug)]
 pub struct Participant {
     pub mpvss_instance: MPVSS,
     pub private_key: BigUint,

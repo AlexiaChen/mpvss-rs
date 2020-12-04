@@ -29,6 +29,7 @@ use std::ops::*;
 
 // The generator is: 2.
 
+#[derive(Debug)]
 pub struct MPVSS {
     pub q: BigUint,
     pub g: BigUint,
