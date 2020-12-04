@@ -62,4 +62,43 @@ mod tests {
 
         assert_eq!(polynomial.coefficients.len(), (degree + 1) as usize);
     }
+    #[test]
+    fn test_get_value() {
+        use super::BigUint;
+        use super::Polynomial;
+        use num_bigint::ToBigUint;
+
+        // a_0 = 3, a_1 = 2, a_2 = 2, a_3 = 4
+        let mut polynomial = Polynomial::new();
+        polynomial.init_coefficients(vec![
+            3.to_biguint().unwrap(),
+            2.to_biguint().unwrap(),
+            2.to_biguint().unwrap(),
+            4.to_biguint().unwrap(),
+        ]);
+
+        // P(0) = a_0 = 3
+        assert_eq!(
+            polynomial.get_value(0.to_biguint().unwrap()),
+            BigUint::from(3_u32)
+        );
+
+        // P(1) = 11
+        assert_eq!(
+            polynomial.get_value(1.to_biguint().unwrap()),
+            BigUint::from(11_u32)
+        );
+
+        // P(2) = 47
+        assert_eq!(
+            polynomial.get_value(2.to_biguint().unwrap()),
+            BigUint::from(47_u32)
+        );
+
+        // P(3) = 135
+        assert_eq!(
+            polynomial.get_value(3.to_biguint().unwrap()),
+            BigUint::from(135_u32)
+        );
+    }
 }
