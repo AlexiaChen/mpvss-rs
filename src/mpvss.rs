@@ -29,7 +29,7 @@ use std::ops::*;
 
 // The generator is: 2.
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MPVSS {
     pub q: BigUint,
     pub g: BigUint,
@@ -75,19 +75,19 @@ impl MPVSS {
 
     pub fn generate_private_key(&self) -> BigUint {
         let mut rng = rand::thread_rng();
-        let mut priv_key: BigUint = rng.gen_biguint_below(&self.q);
+        let mut privkey: BigUint = rng.gen_biguint_below(&self.q);
         // We need the private key and q-1 to be coprime so that we can calculate 1/key mod (q-1) during secret reconstruction.
-        while priv_key.gcd(&self.q.clone().sub(BigUint::from(1_u32))) != BigUint::from(1_u32) {
-            priv_key = rng.gen_biguint_below(&self.q);
+        while privkey.gcd(&self.q.clone().sub(BigUint::from(1_u32))) != BigUint::from(1_u32) {
+            privkey = rng.gen_biguint_below(&self.q);
         }
-        priv_key
+        privkey
     }
 
     /// generate public key from private key
     /// P = G^k over the Group of the order q
-    pub fn generate_public_key(&self, priv_key: &BigUint) -> BigUint {
+    pub fn generate_public_key(&self, privkey: &BigUint) -> BigUint {
         // publicKey = G^privKey mod q
-        self.G.modpow(priv_key, &self.q)
+        self.G.modpow(privkey, &self.q)
     }
 }
 

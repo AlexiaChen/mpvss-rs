@@ -10,7 +10,7 @@ use std::vec::Vec;
 /// s = P(0) = a_0
 /// s_i = P(i)
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Polynomial {
     pub coefficients: Vec<BigUint>,
 }

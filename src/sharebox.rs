@@ -5,7 +5,7 @@ use num_traits::identities::Zero;
 use std::collections::HashMap;
 use std::vec::Vec;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ShareBox {
     pub publickey: BigUint,
     pub share: BigUint,
