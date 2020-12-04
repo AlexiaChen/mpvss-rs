@@ -1,7 +1,10 @@
 use num_bigint::{BigUint, RandBigInt};
+use num_traits::pow::Pow;
+use std::clone::Clone;
+use std::ops::*;
 use std::vec::Vec;
 
-/// Secret Shares on Polynomial, (k,n) threshhod secheme
+/// Shamir Secret Shares on Polynomial, (k,n) threshhod secheme
 /// P(x) = a_0*x^0 + a_1*x^1 + a_2*x^2 + ... + a_n*x^(k-1)
 /// degree is k - 1
 /// s = P(0) = a_0
@@ -35,8 +38,14 @@ impl Polynomial {
     }
 
     /// Get P(x) = value
-    pub fn get_value(x: BigUint) -> BigUint {
-        x
+    pub fn get_value(&self, x: BigUint) -> BigUint {
+        // a_0
+        let mut result = self.coefficients[0].clone();
+        // a0+ a_1*x^1 + a_2*x^2 + ... + a_n*x^n
+        for i in 1..self.coefficients.len() {
+            result = result + self.coefficients[i].clone().mul(x.pow(i));
+        }
+        result
     }
 }
 
@@ -49,7 +58,7 @@ mod tests {
 
         let mut polynomial = Polynomial::new();
         let degree = 3;
-        polynomial.init(degree, BigUint::from(5u32));
+        polynomial.init(degree, BigUint::from(5_u32));
 
         assert_eq!(polynomial.coefficients.len(), (degree + 1) as usize);
     }

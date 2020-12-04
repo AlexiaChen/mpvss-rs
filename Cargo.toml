@@ -15,4 +15,5 @@ gmp-mpfr-sys = "1.4"
 num-bigint = {version = "0.2.6", features = ["rand"]}
 num-integer = "0.1.44"
 num-primes = "0.1.1"
+num-traits = "0.2.11"
 rand = "0.5.6"

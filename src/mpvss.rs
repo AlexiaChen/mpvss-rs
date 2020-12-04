@@ -76,7 +76,7 @@ impl MPVSS {
         let mut rng = rand::thread_rng();
         let mut priv_key: BigUint = rng.gen_biguint_below(&self.q);
         // We need the private key and q-1 to be coprime so that we can calculate 1/key mod (q-1) during secret reconstruction.
-        while priv_key.gcd(&self.q.clone().sub(BigUint::from(1u32))) != BigUint::from(1u32) {
+        while priv_key.gcd(&self.q.clone().sub(BigUint::from(1_u32))) != BigUint::from(1_u32) {
             priv_key = rng.gen_biguint_below(&self.q);
         }
         priv_key
@@ -121,12 +121,12 @@ mod tests {
         use num_integer::Integer;
         use num_primes::Verification;
         let mut mpvss = MPVSS::new();
-        mpvss.q = BigUint::from(49999u32);
+        mpvss.q = BigUint::from(49999_u32);
         assert!(Verification::is_prime(&mpvss.q));
         let priv_key = mpvss.generate_private_key();
         assert_eq!(
-            priv_key.gcd(&mpvss.q.clone().sub(BigUint::from(1u32))),
-            BigUint::from(1u32)
+            priv_key.gcd(&mpvss.q.clone().sub(BigUint::from(1_u32))),
+            BigUint::from(1_u32)
         );
     }
 }
