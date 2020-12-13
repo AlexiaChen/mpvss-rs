@@ -2,7 +2,8 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-#[warn(non_snake_case)]
+#![allow(non_snake_case)]
+
 use crate::mpvss::MPVSS;
 use crate::polynomial::Polynomial;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
