@@ -6,8 +6,11 @@ use num_bigint::BigUint;
 use std::option::Option;
 
 /// Chaum and Pedersen Scheme
-/// to prove that log_g1(h1)= log_g2(h2), for generators g1,h1,g2,h2 ∈ Gq,   Gq is group of order q and q is prime
+///
+/// To prove that log_g1(h1)= log_g2(h2), for generators g1,h1,g2,h2 ∈ Gq,   Gq is group of order q and q is prime
+///
 /// We denote this protocol by DLEQ(g1,h1,g2,h2), and it consists of the following steps, where the prover knows α such that h1 = g1^α and h2 = g2^α:
+///
 /// - The prover sends a1 = g1^w and a2 = g2^w to the verifier, with w ∈ R Zq
 /// - The verifier sends a random challenge c ∈ R Zq to the prover.
 /// - The prover responds with r = w − αc (mod q).
