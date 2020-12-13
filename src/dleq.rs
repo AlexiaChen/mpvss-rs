@@ -8,10 +8,10 @@ use std::option::Option;
 /// Chaum and Pedersen Scheme
 /// to prove that log_g1(h1)= log_g2(h2), for generators g1,h1,g2,h2 ∈ Gq,   Gq is group of order q and q is prime
 /// We denote this protocol by DLEQ(g1,h1,g2,h2), and it consists of the following steps, where the prover knows α such that h1 = g1^α and h2 = g2^α:
-/// - 1. The prover sends a1 = g1^w and a2 = g2^w to the verifier, with w ∈ R Zq
-/// - 2. The verifier sends a random challenge c ∈ R Zq to the prover.
-/// - 3. The prover responds with r = w − αc (mod q).
-/// - 4. The verifier checks that a1 = (g1^r) * (h1^c) and a2 = (g2^r) * (h2^c).
+/// - The prover sends a1 = g1^w and a2 = g2^w to the verifier, with w ∈ R Zq
+/// - The verifier sends a random challenge c ∈ R Zq to the prover.
+/// - The prover responds with r = w − αc (mod q).
+/// - The verifier checks that a1 = (g1^r) * (h1^c) and a2 = (g2^r) * (h2^c).
 #[derive(Debug, Clone)]
 pub struct DLEQ {
     pub g1: BigUint,
