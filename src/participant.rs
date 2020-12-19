@@ -118,6 +118,8 @@ impl Participant {
             let encrypted_secret_share =
                 pubkey.clone().modpow(&secret_share.clone(), &self.mpvss.q);
             shares.insert(pubkey.clone(), encrypted_secret_share);
+
+            // DLEQ(g,X_i,y_i,Y_i)
         }
         DistributionSharesBox::new()
     }

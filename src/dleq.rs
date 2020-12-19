@@ -3,6 +3,10 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use num_bigint::BigUint;
+use num_integer::Integer;
+use num_primes::Generator;
+use num_traits::identities::Zero;
+use std::ops::{Mul, Sub};
 use std::option::Option;
 
 /// Chaum and Pedersen Scheme
@@ -26,6 +30,55 @@ pub struct DLEQ {
     pub q: BigUint,
     pub alpha: BigUint,
     pub c: Option<BigUint>,
+    pub a1: BigUint,
+    pub a2: BigUint,
+    pub r: Option<BigUint>,
 }
 
-impl DLEQ {}
+impl DLEQ {
+    /// new DLEQ instance
+    pub fn new(
+        g1: BigUint,
+        h1: BigUint,
+        g2: BigUint,
+        h2: BigUint,
+        length: i32,
+        q: BigUint,
+        alpha: BigUint,
+    ) -> Self {
+        let w: BigUint = Generator::new_prime(length as usize).mod_floor(&q);
+        return DLEQ {
+            g1: g1,
+            h1: h1,
+            g2: g2,
+            h2: h2,
+            w: w,
+            q: q,
+            alpha: alpha,
+
+            a1: BigUint::zero(),
+            a2: BigUint::zero(),
+            c: None,
+            r: None,
+        };
+    }
+
+    /// get a1 value
+    pub fn get_a1(&self) -> BigUint {
+        self.g1.modpow(&self.w, &self.q)
+    }
+
+    /// get a2 value
+    pub fn get_a2(&self) -> BigUint {
+        self.g2.modpow(&self.w, &self.q)
+    }
+
+    /// get response value
+    pub fn get_r(&self) -> Option<BigUint> {
+        let response_r = match &self.c {
+            None => None,
+            Some(c) => Some(&self.w - &self.alpha * c),
+        };
+        response_r
+    }
+}
