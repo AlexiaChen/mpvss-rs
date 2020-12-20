@@ -69,7 +69,7 @@ impl Participant {
         let mut positions: HashMap<BigUint, i64> = HashMap::new();
         let mut X: HashMap<BigUint, BigUint> = HashMap::new();
         let mut shares: HashMap<BigUint, BigUint> = HashMap::new();
-        let mut challenge_hash = Sha256::new();
+        let mut challenge_hasher = Sha256::new();
 
         // Temp variable
         let mut sampling_points: HashMap<BigUint, BigUint> = HashMap::new();
@@ -93,7 +93,7 @@ impl Participant {
         // p(i) is secret share without encrypt on the ploynomial of the degree t - 1
         // y_i is participant public key
         // Y_i is encrypted secret share
-        for pubkey in publickeys {
+        for pubkey in publickeys.clone() {
             positions.insert(pubkey.clone(), position);
             // calc P(position % (q - 1)), from P(1) to P(n), actually is from share 1 to share n
             let secret_share = polynomial.get_value(
@@ -121,7 +121,7 @@ impl Participant {
             shares.insert(pubkey.clone(), encrypted_secret_share.clone());
 
             // DLEQ(g1,h2,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,enrypted_secret_share_from_pubkey)
-            // Prove That  g^alpha = commintment_with_secret_share and pubkey^alpha = enrypted_secret_share_from_pubkey has same alpha value
+            // Prove That  g^alpha = commintment_with_secret_share and pubkey^alpha = encrypted_secret_share_from_pubkey has same alpha value
             let mut dleq = DLEQ::new();
             dleq.init2(
                 self.mpvss.g.clone(),
@@ -139,13 +139,42 @@ impl Participant {
 
             // Update challenge hash
             // the challenge c for the protocol is computed as a cryptographic hash of X_i,Y_i,a_1i,a_2i, 1 <= i <= n
-            challenge_hash.update(x.to_bytes_le());
-            challenge_hash.update(encrypted_secret_share.to_bytes_le());
-            challenge_hash.update(dleq.get_a1().to_bytes_le());
-            challenge_hash.update(dleq.get_a2().to_bytes_le());
+            challenge_hasher.update(x.to_bytes_le());
+            challenge_hasher.update(encrypted_secret_share.to_bytes_le());
+            challenge_hasher.update(dleq.get_a1().to_bytes_le());
+            challenge_hasher.update(dleq.get_a2().to_bytes_le());
             position += 1;
-        } // end for publickes
+        } // end for participant's publickeys
 
+        // the common challenge c
+        let challenge_hash = challenge_hasher.finalize();
+        let challenge_big_uint =
+            BigUint::from_bytes_le(&challenge_hash[..]).mod_floor(&self.mpvss.q);
+
+        // Calc response r_i
+        let mut responses: HashMap<BigUint, BigUint> = HashMap::new();
+        for pubkey in publickeys.clone() {
+            // DLEQ(g1,h2,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,encrypted_secret_share_from_pubkey)
+            let x_i = X.get(&pubkey).unwrap();
+            let encrypted_secret_share = shares.get(&pubkey).unwrap();
+            let secret_share = sampling_points.get(&pubkey).unwrap();
+            let w = dleq_w.get(&pubkey).unwrap();
+            let mut dleq = DLEQ::new();
+            dleq.init2(
+                self.mpvss.g.clone(),
+                x_i.clone(),
+                pubkey.clone(),
+                encrypted_secret_share.clone(),
+                self.mpvss.q.clone(),
+                secret_share.clone(),
+                w.clone(),
+            );
+            dleq.c = Some(challenge_big_uint.clone());
+            let response = dleq.get_r().unwrap();
+            responses.insert(pubkey.clone(), response);
+        }
+
+        // The proof consists of the common challenge c and the n responses r_i.
         DistributionSharesBox::new()
     }
 
