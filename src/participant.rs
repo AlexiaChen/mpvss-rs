@@ -10,6 +10,7 @@ use crate::polynomial::Polynomial;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
 use num_bigint::{BigUint, RandBigInt, ToBigUint};
 use num_integer::Integer;
+use num_primes::Generator;
 use num_traits::identities::{One, Zero};
 use sha2::{Digest, Sha256};
 use std::clone::Clone;
@@ -232,6 +233,7 @@ impl Participant {
     ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
     ///     Return `None` if the distribution shares box does not contain a share for the participant.
     pub fn extract_share(
+        &mut self,
         shares_box: DistributionSharesBox,
         private_key: BigUint,
         w: BigUint,
@@ -252,11 +254,11 @@ impl Participant {
     ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
     ///     Return `None` if the distribution shares box does not contain a share for the participant.
     pub fn extract_secret_share(
+        &mut self,
         shares_box: DistributionSharesBox,
         private_key: BigUint,
     ) -> Option<ShareBox> {
-        drop(shares_box);
-        drop(private_key);
-        None
+        let w = Generator::new_uint(self.mpvss.length as usize).mod_floor(&self.mpvss.q);
+        self.extract_share(shares_box, private_key, w)
     }
 }
