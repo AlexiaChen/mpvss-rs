@@ -4,6 +4,7 @@
 
 #![allow(non_snake_case)]
 
+use crate::dleq::DLEQ;
 use crate::mpvss::MPVSS;
 use crate::polynomial::Polynomial;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
@@ -13,7 +14,6 @@ use num_traits::identities::{One, Zero};
 use sha2::{Digest, Sha256};
 use std::clone::Clone;
 use std::collections::HashMap;
-use std::ops::*;
 use std::option::Option;
 
 /// A participant represents one party in the secret sharing scheme. The participant can share a secret among a group of other participants and it is then called the "dealer".
@@ -69,7 +69,7 @@ impl Participant {
         let mut positions: HashMap<BigUint, i64> = HashMap::new();
         let mut X: HashMap<BigUint, BigUint> = HashMap::new();
         let mut shares: HashMap<BigUint, BigUint> = HashMap::new();
-        let mut challenge = Sha256::new();
+        let mut challenge_hash = Sha256::new();
 
         // Temp variable
         let mut sampling_points: HashMap<BigUint, BigUint> = HashMap::new();
@@ -82,6 +82,7 @@ impl Participant {
             commitments.push(
                 self.mpvss
                     .g
+                    .clone()
                     .modpow(&polynomial.coefficients[j as usize], &self.mpvss.q),
             )
         }
@@ -112,15 +113,39 @@ impl Participant {
                 )
             }
 
-            X.insert(pubkey.clone(), x);
+            X.insert(pubkey.clone(), x.clone());
 
             // Calc Y_i
             let encrypted_secret_share =
                 pubkey.clone().modpow(&secret_share.clone(), &self.mpvss.q);
-            shares.insert(pubkey.clone(), encrypted_secret_share);
+            shares.insert(pubkey.clone(), encrypted_secret_share.clone());
 
-            // DLEQ(g,X_i,y_i,Y_i)
-        }
+            // DLEQ(g1,h2,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,enrypted_secret_share_from_pubkey)
+            // Prove That  g^alpha = commintment_with_secret_share and pubkey^alpha = enrypted_secret_share_from_pubkey has same alpha value
+            let mut dleq = DLEQ::new();
+            dleq.init2(
+                self.mpvss.g.clone(),
+                x.clone(),
+                pubkey.clone(),
+                encrypted_secret_share.clone(),
+                self.mpvss.q.clone(),
+                secret_share.clone(),
+                w.clone(),
+            );
+
+            dleq_w.insert(pubkey.clone(), dleq.w.clone());
+            // Calc a_1i, a_2i
+            a.insert(pubkey.clone(), (dleq.get_a1(), dleq.get_a2()));
+
+            // Update challenge hash
+            // the challenge c for the protocol is computed as a cryptographic hash of X_i,Y_i,a_1i,a_2i, 1 <= i <= n
+            challenge_hash.update(x.to_bytes_le());
+            challenge_hash.update(encrypted_secret_share.to_bytes_le());
+            challenge_hash.update(dleq.get_a1().to_bytes_le());
+            challenge_hash.update(dleq.get_a2().to_bytes_le());
+            position += 1;
+        } // end for publickes
+
         DistributionSharesBox::new()
     }
 

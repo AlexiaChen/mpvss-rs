@@ -6,8 +6,28 @@ use num_bigint::BigUint;
 use num_integer::Integer;
 use num_primes::Generator;
 use num_traits::identities::Zero;
-use std::ops::{Mul, Sub};
 use std::option::Option;
+
+struct Prover {}
+
+impl Prover {
+    fn send(g: &BigUint, w: &BigUint, q: &BigUint) -> BigUint {
+        g.modpow(w, q)
+    }
+
+    fn response(w: &BigUint, alpha: &BigUint, c: &Option<BigUint>, q: &BigUint) -> Option<BigUint> {
+        let response_r = match c {
+            None => None,
+            Some(c) => {
+                let r: BigUint = w - alpha * c;
+                Some(r.mod_floor(q))
+            }
+        };
+        response_r
+    }
+}
+
+mod verifier {}
 
 /// Chaum and Pedersen Scheme
 ///
@@ -37,24 +57,15 @@ pub struct DLEQ {
 
 impl DLEQ {
     /// new DLEQ instance
-    pub fn new(
-        g1: BigUint,
-        h1: BigUint,
-        g2: BigUint,
-        h2: BigUint,
-        length: i32,
-        q: BigUint,
-        alpha: BigUint,
-    ) -> Self {
-        let w: BigUint = Generator::new_prime(length as usize).mod_floor(&q);
+    pub fn new() -> Self {
         return DLEQ {
-            g1: g1,
-            h1: h1,
-            g2: g2,
-            h2: h2,
-            w: w,
-            q: q,
-            alpha: alpha,
+            g1: BigUint::zero(),
+            h1: BigUint::zero(),
+            g2: BigUint::zero(),
+            h2: BigUint::zero(),
+            w: BigUint::zero(),
+            q: BigUint::zero(),
+            alpha: BigUint::zero(),
 
             a1: BigUint::zero(),
             a2: BigUint::zero(),
@@ -62,23 +73,51 @@ impl DLEQ {
             r: None,
         };
     }
+    pub fn init(
+        &mut self,
+        g1: BigUint,
+        h1: BigUint,
+        g2: BigUint,
+        h2: BigUint,
+        length: u32,
+        q: BigUint,
+        alpha: BigUint,
+    ) {
+        let w: BigUint = Generator::new_prime(length as usize).mod_floor(&q);
+        self.init2(g1, h1, g2, h2, q, alpha, w);
+    }
+
+    pub fn init2(
+        &mut self,
+        g1: BigUint,
+        h1: BigUint,
+        g2: BigUint,
+        h2: BigUint,
+        q: BigUint,
+        alpha: BigUint,
+        w: BigUint,
+    ) {
+        self.g1 = g1;
+        self.h1 = h1;
+        self.g2 = g2;
+        self.h2 = h2;
+        self.w = w;
+        self.q = q;
+        self.alpha = alpha;
+    }
 
     /// get a1 value
     pub fn get_a1(&self) -> BigUint {
-        self.g1.modpow(&self.w, &self.q)
+        Prover::send(&self.g1, &self.w, &self.q)
     }
 
     /// get a2 value
     pub fn get_a2(&self) -> BigUint {
-        self.g2.modpow(&self.w, &self.q)
+        Prover::send(&self.g2, &self.w, &self.q)
     }
 
-    /// get response value
+    /// get response r value
     pub fn get_r(&self) -> Option<BigUint> {
-        let response_r = match &self.c {
-            None => None,
-            Some(c) => Some(&self.w - &self.alpha * c),
-        };
-        response_r
+        Prover::response(&self.w, &self.alpha, &self.c, &self.q)
     }
 }
