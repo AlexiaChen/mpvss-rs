@@ -43,8 +43,8 @@ impl Participant {
 
     /// Takes a secret as input and returns the distribution shares Box which is going to be submitted to all the participants the secret is going to be shared with.
     /// Those participants are specified by their public keys.
-    /// They use the distribution bundle to verify that the shares are correct (without learning anything about the shares that are not supposed to be decrypted by them) and extract their encrypted shares.
-    /// In fact, the distribution bundle can be published to everyone allowing even external parties to verify the integrity of the shares.
+    /// They use the distribution shares box to verify that the shares are correct (without learning anything about the shares that are not supposed to be decrypted by them) and extract their encrypted shares.
+    /// In fact, the distribution shares box can be published to everyone allowing even external parties to verify the integrity of the shares.
     ///
     /// - Parameters:
     ///   - secret: The value that is going to be shared among the other participants.
@@ -64,7 +64,7 @@ impl Participant {
         polynomial: Polynomial,
         w: BigUint,
     ) -> DistributionSharesBox {
-        // Data the distribution bundle is going to be consisting of
+        // Data the distribution shares box is going to be consisting of
         let mut commitments: Vec<BigUint> = Vec::new();
         let mut positions: HashMap<BigUint, i64> = HashMap::new();
         let mut X: HashMap<BigUint, BigUint> = HashMap::new();
@@ -198,8 +198,8 @@ impl Participant {
     }
 
     /// Takes a secret as input and returns the distribution shares Box which is going to be submitted to all the participants the secret is going to be shared with.
-    /// Those participants are specified by their public keys. They use the distribution bundle to verify that the shares are correct (without learning anything about the shares that are not supposed to be decrypted by them)
-    /// and extract their encrypted shares. In fact, the distribution bundle can be published to everyone allowing even external parties to verify the integrity of the shares.
+    /// Those participants are specified by their public keys. They use the distribution shares box to verify that the shares are correct (without learning anything about the shares that are not supposed to be decrypted by them)
+    /// and extract their encrypted shares. In fact, the distribution shares box can be published to everyone allowing even external parties to verify the integrity of the shares.
     ///
     /// - Parameters:
     ///   - secret: The value that is going to be shared among the other participants.
@@ -221,7 +221,42 @@ impl Participant {
         self.distribute(secret, publickeys, threshold, polynomial, w)
     }
 
-    pub fn extract_share() -> Option<ShareBox> {
+    /// Extracts the share from a given distribution shares box that is addressed to the calling participant.
+    /// The extracted share is bundled with a proof which allows the other participants to verify the share's correctness.
+    ///
+    /// - Parameters:
+    ///   - distributionBundle: The distribution shares box that consists the share to be extracted.
+    ///   - privateKey: The participant's private key used to decrypt the share.
+    ///   - w: An arbitrary chosen value needed for creating the proof that the share is correct.
+    /// - Returns: The share box that is to be submitted to all the other participants in order to reconstruct the secret.
+    ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
+    ///     Return `None` if the distribution shares box does not contain a share for the participant.
+    pub fn extract_share(
+        shares_box: DistributionSharesBox,
+        private_key: BigUint,
+        w: BigUint,
+    ) -> Option<ShareBox> {
+        drop(shares_box);
+        drop(private_key);
+        drop(w);
+        None
+    }
+
+    /// Extracts the share from a given distribution shares box that is addressed to the calling participant.
+    /// The extracted share is boxed with a proof which allows the other participants to verify the share's correctness.
+    ///
+    /// - Parameters:
+    ///   - shares_box: The distribution shares box that consists the share to be extracted.
+    ///   - private_key: The participant's private key used to decrypt the share.
+    /// - Returns: The share box that is to be submitted to all the other participants in order to reconstruct the secret.
+    ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
+    ///     Return `None` if the distribution shares box does not contain a share for the participant.
+    pub fn extract_secret_share(
+        shares_box: DistributionSharesBox,
+        private_key: BigUint,
+    ) -> Option<ShareBox> {
+        drop(shares_box);
+        drop(private_key);
         None
     }
 }
