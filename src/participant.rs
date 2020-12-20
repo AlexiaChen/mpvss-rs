@@ -8,7 +8,7 @@ use crate::dleq::DLEQ;
 use crate::mpvss::MPVSS;
 use crate::polynomial::Polynomial;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
-use num_bigint::{BigUint, ToBigUint};
+use num_bigint::{BigUint, RandBigInt, ToBigUint};
 use num_integer::Integer;
 use num_traits::identities::{One, Zero};
 use sha2::{Digest, Sha256};
@@ -172,7 +172,7 @@ impl Participant {
             dleq.c = Some(challenge_big_uint.clone());
             let response = dleq.get_r().unwrap();
             responses.insert(pubkey.clone(), response);
-        } // end for pubkeys
+        } // end for pubkeys Calc r_i
 
         // Calc U = secret xor SHA256(G^s) = secret xor SHA256(G^p(0)), It is not present in the original paper.
         let shared_value = self
@@ -195,6 +195,30 @@ impl Participant {
             U,
         );
         shares_box
+    }
+
+    /// Takes a secret as input and returns the distribution shares Box which is going to be submitted to all the participants the secret is going to be shared with.
+    /// Those participants are specified by their public keys. They use the distribution bundle to verify that the shares are correct (without learning anything about the shares that are not supposed to be decrypted by them)
+    /// and extract their encrypted shares. In fact, the distribution bundle can be published to everyone allowing even external parties to verify the integrity of the shares.
+    ///
+    /// - Parameters:
+    ///   - secret: The value that is going to be shared among the other participants.
+    ///   - publicKeys: Array of public keys of each participant the secret is to be shared with.
+    ///   - threshold: The number of shares that is needed in order to reconstruct the secret. It must not be greater than the total number of participants.
+    /// - Requires: `threshold` <= number of participants
+    /// - Returns: The distribution shares Box that is published to everyone (especially but not only the participants) can check the shares' integrity. Furthermore the participants extract their shares from it.
+    pub fn distribute_secret(
+        &mut self,
+        secret: BigUint,
+        publickeys: Vec<BigUint>,
+        threshold: u32,
+    ) -> DistributionSharesBox {
+        let mut polynomial = Polynomial::new();
+        polynomial.init((threshold - 1) as i32, self.mpvss.q.clone());
+
+        let mut rng = rand::thread_rng();
+        let w: BigUint = rng.gen_biguint_below(&self.mpvss.q);
+        self.distribute(secret, publickeys, threshold, polynomial, w)
     }
 
     pub fn extract_share() -> Option<ShareBox> {
