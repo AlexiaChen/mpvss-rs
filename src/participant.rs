@@ -172,10 +172,29 @@ impl Participant {
             dleq.c = Some(challenge_big_uint.clone());
             let response = dleq.get_r().unwrap();
             responses.insert(pubkey.clone(), response);
-        }
+        } // end for pubkeys
+
+        // Calc U = secret xor SHA256(G^s) = secret xor SHA256(G^p(0)), It is not present in the original paper.
+        let shared_value = self
+            .mpvss
+            .G
+            .modpow(&polynomial.get_value(BigUint::zero()), &self.mpvss.q);
+        let sha256_hash = sha2::Sha256::digest(&shared_value.to_bytes_le());
+        let hash_big_uint = BigUint::from_bytes_le(&sha256_hash[..]).mod_floor(&self.mpvss.q);
+        let U = secret ^ hash_big_uint;
 
         // The proof consists of the common challenge c and the n responses r_i.
-        DistributionSharesBox::new()
+        let mut shares_box = DistributionSharesBox::new();
+        shares_box.init(
+            commitments,
+            positions,
+            shares,
+            publickeys,
+            challenge_big_uint,
+            responses,
+            U,
+        );
+        shares_box
     }
 
     pub fn extract_share() -> Option<ShareBox> {
