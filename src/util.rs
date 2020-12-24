@@ -30,7 +30,7 @@ impl Util {
     ///
     /// Such an integer may not exist. If so, this function will return `None`.
     /// Otherwise, the inverse will be returned wrapped up in a `Some`.
-    pub fn mod_inverse(a: BigInt, modular: BigInt) -> Option<BigInt> {
+    pub fn mod_inverse(a: &BigInt, modular: &BigInt) -> Option<BigInt> {
         let (g, x, _) = Util::extend_gcd(a.clone(), modular.clone());
         if g != BigInt::one() {
             None
@@ -64,9 +64,9 @@ mod tests {
         use super::Util;
 
         // 3*inverse = 1 mod 26
-        let does_exist = Util::mod_inverse(BigInt::from(3), BigInt::from(26));
+        let does_exist = Util::mod_inverse(&BigInt::from(3), &BigInt::from(26));
         // 4*inverse = 1 mod 32
-        let does_not_exist = Util::mod_inverse(BigInt::from(4), BigInt::from(32));
+        let does_not_exist = Util::mod_inverse(&BigInt::from(4), &BigInt::from(32));
 
         match does_exist {
             Some(x) => assert_eq!(x, BigInt::from(9)),

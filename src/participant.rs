@@ -247,8 +247,8 @@ impl Participant {
         // Using its private key x_i, each participant finds the encrypted share S_i = G^p(i) from Y_i by computing S_i = Y_i^(1/x_i).
         // find modular multiplicative inverses of private key
         let privkey_inverse = Util::mod_inverse(
-            private_key.to_bigint().unwrap(),
-            self.mpvss.q.to_bigint().unwrap(),
+            &private_key.to_bigint().unwrap(),
+            &self.mpvss.q.to_bigint().unwrap(),
         )
         .unwrap();
         let decrypted_share =
