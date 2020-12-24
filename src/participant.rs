@@ -244,7 +244,8 @@ impl Participant {
         let encrypted_secret_share = shares_box.shares.get(&public_key).unwrap();
 
         // Decryption of the shares.
-        // Using its private key x_i, each participant finds the encrypted share S_i = G^p(i) from Y_i by computing S_i = Y_i^(1/x_i).
+        // Using its private key x_i, each participant finds the decrypted share S_i = G^p(i) from Y_i by computing S_i = Y_i^(1/x_i).
+        // Y_i is encrypted share: Y_i = y_i^p(i)
         // find modular multiplicative inverses of private key
         let privkey_inverse = Util::mod_inverse(
             &private_key.to_bigint().unwrap(),
