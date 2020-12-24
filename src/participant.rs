@@ -8,7 +8,8 @@ use crate::dleq::DLEQ;
 use crate::mpvss::MPVSS;
 use crate::polynomial::Polynomial;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
-use num_bigint::{BigUint, RandBigInt, ToBigUint};
+use crate::util::Util;
+use num_bigint::{BigUint, RandBigInt, ToBigInt, ToBigUint};
 use num_integer::Integer;
 use num_primes::Generator;
 use num_traits::identities::{One, Zero};
@@ -65,6 +66,7 @@ impl Participant {
         polynomial: Polynomial,
         w: BigUint,
     ) -> DistributionSharesBox {
+        assert!(threshold <= publickeys.len() as u32);
         // Data the distribution shares box is going to be consisting of
         let mut commitments: Vec<BigUint> = Vec::new();
         let mut positions: HashMap<BigUint, i64> = HashMap::new();
@@ -238,8 +240,22 @@ impl Participant {
         private_key: BigUint,
         w: BigUint,
     ) -> Option<ShareBox> {
+        let public_key = self.mpvss.generate_public_key(&private_key);
+        let encrypted_secret_share = shares_box.shares.get(&public_key).unwrap();
+
+        // Decryption of the shares.
+        // Using its private key x_i, each participant finds the encrypted share S_i = G^p(i) from Y_i by computing S_i = Y_i^(1/x_i).
+        // find modular multiplicative inverses of private key
+        let privkey_inverse = Util::mod_inverse(
+            private_key.to_bigint().unwrap(),
+            self.mpvss.q.to_bigint().unwrap(),
+        )
+        .unwrap();
+        let decrypted_share =
+            encrypted_secret_share.modpow(&privkey_inverse.to_biguint().unwrap(), &self.mpvss.q);
+
+        drop(decrypted_share);
         drop(shares_box);
-        drop(private_key);
         drop(w);
         None
     }
