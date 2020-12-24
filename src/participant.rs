@@ -256,7 +256,6 @@ impl Participant {
             encrypted_secret_share.modpow(&privkey_inverse.to_biguint().unwrap(), &self.mpvss.q);
 
         drop(decrypted_share);
-        drop(shares_box);
         drop(w);
         None
     }
