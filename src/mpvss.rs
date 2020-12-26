@@ -4,11 +4,11 @@
 
 #![allow(non_snake_case)]
 
-use num_bigint::{BigUint, RandBigInt, ToBigUint};
+use num_bigint::{BigUint, RandBigInt};
 use num_integer::Integer;
 use num_primes::Generator;
+use num_traits::identities::One;
 use std::clone::Clone;
-use std::ops::*;
 
 /// 2048-bit MODP Group
 /// New Modular Exponential (MODP) Diffie-Hellman groups
@@ -48,14 +48,11 @@ impl MPVSS {
     /// sophie germain prime is p if 2*p + 1 is also prime, let 2*p + 1 = q
     pub fn new() -> Self {
         let q: BigUint = BigUint::parse_bytes(b"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece45b3dc2007cb8a163bf0598da48361c55d39a69163fa8fd24cf5f83655d23dca3ad961c62f356208552bb9ed529077096966d670c354e4abc9804f1746c08ca18217c32905e462e36ce3be39e772c180e86039b2783a2ec07a28fb5c55df06f4c52c9de2bcbf6955817183995497cea956ae515d2261898fa051015728e5a8aacaa68ffffffffffffffff", 16).unwrap();
-        let g: BigUint = q
-            .clone()
-            .sub(1.to_biguint().unwrap())
-            .div(2.to_biguint().unwrap());
+        let g: BigUint = (q.clone() - BigUint::one()) / BigUint::from(2_u64);
         return MPVSS {
             q: q,
             g: g,
-            G: 2.to_biguint().unwrap(),
+            G: BigUint::from(2_u64),
             length: 2048,
         };
     }
@@ -65,14 +62,11 @@ impl MPVSS {
     /// - Parameter length: Number of bits used for choosing numbers and doing calculations.
     pub fn init(length: u32) -> Self {
         let q: BigUint = Generator::safe_prime(length as usize);
-        let g: BigUint = q
-            .clone()
-            .sub(1.to_biguint().unwrap())
-            .div(2.to_biguint().unwrap());
+        let g: BigUint = (q.clone() - BigUint::one()) / BigUint::from(2_u64);
         return MPVSS {
             q: q,
             g: g,
-            G: 2.to_biguint().unwrap(),
+            G: BigUint::from(2_u64),
             length: length,
         };
     }
@@ -81,7 +75,7 @@ impl MPVSS {
         let mut rng = rand::thread_rng();
         let mut privkey: BigUint = rng.gen_biguint_below(&self.q);
         // We need the private key and q-1 to be coprime so that we can calculate 1/key mod (q-1) during secret reconstruction.
-        while privkey.gcd(&self.q.clone().sub(BigUint::from(1_u32))) != BigUint::from(1_u32) {
+        while privkey.gcd(&(self.q.clone() - BigUint::one())) != BigUint::one() {
             privkey = rng.gen_biguint_below(&self.q);
         }
         privkey
@@ -130,8 +124,8 @@ mod tests {
         assert!(Verification::is_prime(&mpvss.q));
         let priv_key = mpvss.generate_private_key();
         assert_eq!(
-            priv_key.gcd(&mpvss.q.clone().sub(BigUint::from(1_u32))),
-            BigUint::from(1_u32)
+            priv_key.gcd(&mpvss.q.clone().sub(BigUint::one())),
+            BigUint::one()
         );
     }
 }
