@@ -255,9 +255,41 @@ impl Participant {
         let decrypted_share =
             encrypted_secret_share.modpow(&privkey_inverse.to_biguint().unwrap(), &self.mpvss.q);
 
-        drop(decrypted_share);
-        drop(w);
-        None
+        // To this end it suffices to prove knowledge of an α such that y_i= G^α and Y_i= S_i^α, which is accomplished by the non-interactive version of the protocol DLEQ(G,y_i,S_i,Y_i).
+        // DLEQ(G,y_i,S_i,Y_i) => DLEQ(G, publickey, decrypted_share, encryted_share)
+        // All of this is to prove and tell participants that the decrypted share is must use your own public key encrypted,
+        // and only you can decrypt the share with your own private key and verify the share's proof
+        let mut dleq = DLEQ::new();
+        dleq.init2(
+            self.mpvss.G.clone(),
+            public_key.clone(),
+            decrypted_share.clone(),
+            encrypted_secret_share.clone(),
+            self.mpvss.q.clone(),
+            private_key.clone(),
+            w,
+        );
+
+        let mut challenge_hasher = Sha256::new();
+        challenge_hasher.update(public_key.to_bytes_le());
+        challenge_hasher.update(encrypted_secret_share.to_bytes_le());
+        challenge_hasher.update(dleq.get_a1().to_bytes_le());
+        challenge_hasher.update(dleq.get_a2().to_bytes_le());
+
+        // the challenge c
+        let challenge_hash = challenge_hasher.finalize();
+        let challenge_big_uint =
+            BigUint::from_bytes_le(&challenge_hash[..]).mod_floor(&self.mpvss.q);
+        dleq.c = Some(challenge_big_uint.clone());
+
+        let mut share_box = ShareBox::new();
+        share_box.init(
+            public_key,
+            decrypted_share,
+            challenge_big_uint,
+            dleq.get_r().unwrap(),
+        );
+        Some(share_box)
     }
 
     /// Extracts the share from a given distribution shares box that is addressed to the calling participant.
