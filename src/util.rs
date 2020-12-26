@@ -58,9 +58,6 @@ impl Util {
             if j != *i && values.contains(&j) {
                 numerator = numerator * j;
                 denominator = denominator * (j - *i);
-                println!("j: {}", j);
-                println!("numberator: {}", numerator);
-                println!("denominator: {}", denominator);
             }
         }
         return (numerator, denominator);
