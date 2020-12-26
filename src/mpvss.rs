@@ -124,7 +124,7 @@ mod tests {
         assert!(Verification::is_prime(&mpvss.q));
         let priv_key = mpvss.generate_private_key();
         assert_eq!(
-            priv_key.gcd(&mpvss.q.clone().sub(BigUint::one())),
+            priv_key.gcd(&(mpvss.q.clone() - BigUint::one())),
             BigUint::one()
         );
     }
