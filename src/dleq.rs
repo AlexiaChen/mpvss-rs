@@ -27,7 +27,9 @@ impl Prover {
     }
 }
 
-mod verifier {}
+struct Verifier {}
+
+impl Verifier {}
 
 /// Chaum and Pedersen Scheme
 ///
