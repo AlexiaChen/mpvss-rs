@@ -5,7 +5,7 @@
 use num_bigint::BigUint;
 use num_integer::Integer;
 use num_primes::Generator;
-use num_traits::identities::Zero;
+use num_traits::identities::{One, Zero};
 use std::option::Option;
 
 struct Prover {}
@@ -20,7 +20,7 @@ impl Prover {
             None => None,
             Some(c) => {
                 let r: BigUint = w - alpha * c;
-                Some(r.mod_floor(q))
+                Some(r.mod_floor(&(q.clone() - BigUint::one())))
             }
         };
         response_r

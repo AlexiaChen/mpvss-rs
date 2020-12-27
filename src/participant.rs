@@ -100,8 +100,7 @@ impl Participant {
             positions.insert(pubkey.clone(), position);
             // calc P(position % (q - 1)), from P(1) to P(n), actually is from share 1 to share n
             let secret_share = polynomial.get_value(
-                BigUint::from(position as u64)
-                    .mod_floor(&(self.mpvss.q.clone() - 1.to_biguint().unwrap())),
+                BigUint::from(position as u64).mod_floor(&(self.mpvss.q.clone() - BigUint::one())),
             );
             sampling_points.insert(pubkey.clone(), secret_share.clone());
 
@@ -151,8 +150,8 @@ impl Participant {
 
         // the common challenge c
         let challenge_hash = challenge_hasher.finalize();
-        let challenge_big_uint =
-            BigUint::from_bytes_le(&challenge_hash[..]).mod_floor(&self.mpvss.q);
+        let challenge_big_uint = BigUint::from_bytes_le(&challenge_hash[..])
+            .mod_floor(&(self.mpvss.q.clone() - BigUint::one()));
 
         // Calc response r_i
         let mut responses: HashMap<BigUint, BigUint> = HashMap::new();
@@ -178,10 +177,12 @@ impl Participant {
         } // end for pubkeys Calc r_i
 
         // Calc U = secret xor SHA256(G^s) = secret xor SHA256(G^p(0)), It is not present in the original paper.
-        let shared_value = self
-            .mpvss
-            .G
-            .modpow(&polynomial.get_value(BigUint::zero()), &self.mpvss.q);
+        let shared_value = self.mpvss.G.modpow(
+            &polynomial
+                .get_value(BigUint::zero())
+                .mod_floor(&(self.mpvss.q.clone() - BigUint::one())),
+            &self.mpvss.q,
+        );
         let sha256_hash = sha2::Sha256::digest(&shared_value.to_bytes_le());
         let hash_big_uint = BigUint::from_bytes_le(&sha256_hash[..]).mod_floor(&self.mpvss.q);
         let U = secret ^ hash_big_uint;
@@ -278,8 +279,8 @@ impl Participant {
 
         // the challenge c
         let challenge_hash = challenge_hasher.finalize();
-        let challenge_big_uint =
-            BigUint::from_bytes_le(&challenge_hash[..]).mod_floor(&self.mpvss.q);
+        let challenge_big_uint = BigUint::from_bytes_le(&challenge_hash[..])
+            .mod_floor(&(self.mpvss.q.clone() - BigUint::one()));
         dleq.c = Some(challenge_big_uint.clone());
 
         let mut share_box = ShareBox::new();
