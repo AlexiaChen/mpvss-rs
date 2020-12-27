@@ -4,10 +4,13 @@
 
 #![allow(non_snake_case)]
 
+use crate::dleq::DLEQ;
+use crate::sharebox::{DistributionSharesBox, ShareBox};
 use num_bigint::{BigUint, RandBigInt};
 use num_integer::Integer;
 use num_primes::Generator;
 use num_traits::identities::One;
+use sha2::{Digest, Sha256};
 use std::clone::Clone;
 
 /// 2048-bit MODP Group
@@ -86,6 +89,56 @@ impl MPVSS {
     pub fn generate_public_key(&self, privkey: &BigUint) -> BigUint {
         // publicKey = G^privKey mod q
         self.G.modpow(privkey, &self.q)
+    }
+
+    /// Verifies if the share in the distribution share box was decrypted correctly by the respective participant.
+    ///
+    /// - Parameters:
+    ///   - shareBox: The share box containing the share to be verified.
+    ///   - distributionShareBox: The distribution share box that contains the share.
+    ///   - publicKey: The public key of the sender of the share bundle.
+    /// - Returns: Returns `true` if the share in the distribution share box matches the decryption of the encrypted share and `false` otherwise.
+    pub fn verify_share(
+        &self,
+        sharebox: &ShareBox,
+        distribution_sharebox: &DistributionSharesBox,
+        publickey: &BigUint,
+    ) -> bool {
+        let encrypted_share = distribution_sharebox.shares.get(publickey);
+        if encrypted_share.is_none() {
+            return false;
+        }
+        self.verify(sharebox, encrypted_share.unwrap())
+    }
+
+    /// Verifies if the share in the share bundle was decrypted correctly by the respective participant.
+    ///
+    /// - Parameters:
+    ///   - shareBox: The share box containing the share to be verified.
+    ///   - encryptedShare: The encrypted share from the distribution share box.
+    /// - Returns: Returns `true` if the share in the share box matches the decryption of the encrypted share and `false` otherwise.
+    pub fn verify(&self, sharebox: &ShareBox, encrypted_share: &BigUint) -> bool {
+        // Verification of the share.
+        // Using publickey,encrypted_hsare,decrypted_share,response and c as input, the verifier computes a_1i,a_2i as:
+        // a_1i = G^r * publickey^c,   a_2i = decrypted_shar^r * encrypted_share^c
+        // and checks that the hash of publickey,encrypted_hsare,decrypted_share,response  matches c.
+        let mut dleq = DLEQ::new();
+        dleq.g1 = self.G.clone();
+        dleq.h1 = sharebox.publickey.clone();
+        dleq.g2 = sharebox.share.clone();
+        dleq.h2 = encrypted_share.clone();
+        dleq.r = Some(sharebox.response.clone());
+        dleq.c = Some(sharebox.challenge.clone());
+        dleq.q = self.q.clone();
+        dleq.check()
+    }
+
+    pub fn verify_distribution_share() -> bool {
+        // Verification of the shares.
+        // The verifier computes X_i = ∏(j = 0 -> t - 1): (C_j)^(i^j) from the C_j values. Using y_i,X_i,Y_i,r_i, 1 ≤ i ≤ n and c as input, the verifier computes a_1i,a_2i as:
+        // a_1i = g^(r_i) * X_i^c,   a_2i = y_i^(r_i) * Y_i^c
+        // and checks that the hash of X_i,Y_i, a_1i, a_2i,  1 ≤ i ≤ n, matches c.
+        false
     }
 }
 

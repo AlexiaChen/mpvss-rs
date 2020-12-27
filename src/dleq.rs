@@ -6,6 +6,7 @@ use num_bigint::BigUint;
 use num_integer::Integer;
 use num_primes::Generator;
 use num_traits::identities::{One, Zero};
+use sha2::{Digest, Sha256};
 use std::option::Option;
 
 struct Prover {}
@@ -28,8 +29,33 @@ impl Prover {
 }
 
 struct Verifier {}
+impl Verifier {
+    fn send() -> BigUint {
+        BigUint::zero()
+    }
+    fn check(
+        g1: &BigUint,
+        h1: &BigUint,
+        g2: &BigUint,
+        h2: &BigUint,
+        response: &BigUint,
+        c: &BigUint,
+        q: &BigUint,
+    ) -> bool {
+        let a1 = (g1.modpow(response, q) * h1.modpow(c, q)) % q;
+        let a2 = (g2.modpow(response, q) * h2.modpow(c, q)) % q;
+        let mut challenge_hasher = Sha256::new();
+        challenge_hasher.update(h1.to_bytes_le());
+        challenge_hasher.update(h2.to_bytes_le());
+        challenge_hasher.update(a1.to_bytes_le());
+        challenge_hasher.update(a2.to_bytes_le());
 
-impl Verifier {}
+        let challenge_hash = challenge_hasher.finalize();
+        let challenge_big_uint =
+            BigUint::from_bytes_le(&challenge_hash[..]).mod_floor(&(q.clone() - BigUint::one()));
+        challenge_big_uint == *c
+    }
+}
 
 /// Chaum and Pedersen Scheme
 ///
@@ -121,5 +147,22 @@ impl DLEQ {
     /// get response r value
     pub fn get_r(&self) -> Option<BigUint> {
         Prover::response(&self.w, &self.alpha, &self.c, &self.q)
+    }
+
+    /// send a random challenge c
+    pub fn get_c(&self) -> BigUint {
+        Verifier::send()
+    }
+    /// check and verify
+    pub fn check(&self) -> bool {
+        Verifier::check(
+            &self.g1,
+            &self.h1,
+            &self.g2,
+            &self.h2,
+            &self.r.clone().unwrap(),
+            &self.c.clone().unwrap(),
+            &self.q,
+        )
     }
 }
