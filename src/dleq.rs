@@ -33,7 +33,15 @@ impl Verifier {
     fn send() -> BigUint {
         BigUint::zero()
     }
-    fn check(
+    fn check(c: &BigUint, q: &BigUint, challenge_hasher: &Sha256) -> bool {
+        // Calculate challenge
+        let challenge_hash = challenge_hasher.clone().finalize();
+        let challenge_big_uint =
+            BigUint::from_bytes_le(&challenge_hash[..]).mod_floor(&(q.clone() - BigUint::one()));
+        challenge_big_uint == *c
+    }
+
+    fn update(
         g1: &BigUint,
         h1: &BigUint,
         g2: &BigUint,
@@ -41,19 +49,16 @@ impl Verifier {
         response: &BigUint,
         c: &BigUint,
         q: &BigUint,
-    ) -> bool {
+        challenge_hasher: &mut Sha256,
+    ) {
+        // Calc a1 a2
         let a1 = (g1.modpow(response, q) * h1.modpow(c, q)) % q;
         let a2 = (g2.modpow(response, q) * h2.modpow(c, q)) % q;
-        let mut challenge_hasher = Sha256::new();
+        // Update hash
         challenge_hasher.update(h1.to_bytes_le());
         challenge_hasher.update(h2.to_bytes_le());
         challenge_hasher.update(a1.to_bytes_le());
         challenge_hasher.update(a2.to_bytes_le());
-
-        let challenge_hash = challenge_hasher.finalize();
-        let challenge_big_uint =
-            BigUint::from_bytes_le(&challenge_hash[..]).mod_floor(&(q.clone() - BigUint::one()));
-        challenge_big_uint == *c
     }
 }
 
@@ -153,9 +158,10 @@ impl DLEQ {
     pub fn get_c(&self) -> BigUint {
         Verifier::send()
     }
-    /// check and verify
-    pub fn check(&self) -> bool {
-        Verifier::check(
+
+    /// Update challenge hash
+    pub fn update_hash(&self, challenge_hasher: &mut Sha256) {
+        Verifier::update(
             &self.g1,
             &self.h1,
             &self.g2,
@@ -163,6 +169,11 @@ impl DLEQ {
             &self.r.clone().unwrap(),
             &self.c.clone().unwrap(),
             &self.q,
+            challenge_hasher,
         )
+    }
+    /// check and verify
+    pub fn check(&self, challenge_hasher: &Sha256) -> bool {
+        Verifier::check(&self.c.clone().unwrap(), &self.q, challenge_hasher)
     }
 }

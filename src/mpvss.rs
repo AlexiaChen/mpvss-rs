@@ -123,6 +123,7 @@ impl MPVSS {
         // a_1i = G^r * publickey^c,   a_2i = decrypted_shar^r * encrypted_share^c
         // and checks that the hash of publickey,encrypted_hsare,decrypted_share,response  matches c.
         let mut dleq = DLEQ::new();
+        let mut challenge_haser = Sha256::new();
         dleq.g1 = self.G.clone();
         dleq.h1 = sharebox.publickey.clone();
         dleq.g2 = sharebox.share.clone();
@@ -130,15 +131,52 @@ impl MPVSS {
         dleq.r = Some(sharebox.response.clone());
         dleq.c = Some(sharebox.challenge.clone());
         dleq.q = self.q.clone();
-        dleq.check()
+        dleq.update_hash(&mut challenge_haser);
+        dleq.check(&challenge_haser)
     }
 
-    pub fn verify_distribution_share() -> bool {
+    /// Verifies that the shares the distribution  shares box consists are consistent so that they can be used to reconstruct the secret later.
+    ///
+    /// - Parameter distribute_sharesbox: The distribution shares box whose consistency is to be verified.
+    /// - Returns: Returns `true` if the shares are correct and `false` otherwise.
+    pub fn verify_distribution_shares(&self, distribute_sharesbox: &DistributionSharesBox) -> bool {
         // Verification of the shares.
-        // The verifier computes X_i = ∏(j = 0 -> t - 1): (C_j)^(i^j) from the C_j values. Using y_i,X_i,Y_i,r_i, 1 ≤ i ≤ n and c as input, the verifier computes a_1i,a_2i as:
+        // The verifier computes X_i = ∏(j = 0 -> t - 1): (C_j)^(i^j) from the C_j values.
+        // Using y_i,X_i,Y_i,r_i, 1 ≤ i ≤ n and c as input, the verifier computes a_1i,a_2i as:
         // a_1i = g^(r_i) * X_i^c,   a_2i = y_i^(r_i) * Y_i^c
         // and checks that the hash of X_i,Y_i, a_1i, a_2i,  1 ≤ i ≤ n, matches c.
-        false
+        let mut dleq = DLEQ::new();
+        let mut challenge_hasher = Sha256::new();
+        for publickey in distribute_sharesbox.publickeys.iter() {
+            let position = distribute_sharesbox.positions.get(publickey);
+            let response = distribute_sharesbox.responses.get(publickey);
+            let encrypted_share = distribute_sharesbox.shares.get(publickey);
+            if position.is_none() || response.is_none() || encrypted_share.is_none() {
+                return false;
+            }
+
+            // Calculate X_i
+            let mut x: BigUint = BigUint::one();
+            let mut exponent: BigUint = BigUint::one();
+            for j in 0..distribute_sharesbox.commitments.len() {
+                x = (x * distribute_sharesbox.commitments[j].modpow(&exponent, &self.q)) % &self.q;
+                exponent = (exponent * BigUint::from(position.unwrap().clone() as u64))
+                    % &(self.q.clone() - BigUint::one());
+            }
+
+            // Calculate a_1i, a_2i and update hash
+            dleq.g1 = self.g.clone();
+            dleq.h1 = x;
+            dleq.g2 = publickey.clone();
+            dleq.h2 = encrypted_share.unwrap().clone();
+            dleq.r = Some(response.unwrap().clone());
+            dleq.c = Some(distribute_sharesbox.challenge.clone());
+            dleq.q = self.q.clone();
+            dleq.update_hash(&mut challenge_hasher);
+        } // end for participant's public keys
+
+        // Calculate challenge and check if it is match c
+        dleq.check(&challenge_hasher)
     }
 }
 
