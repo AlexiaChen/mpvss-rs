@@ -8,3 +8,6 @@ pub mod participant;
 pub mod polynomial;
 pub mod sharebox;
 pub mod util;
+
+pub use mpvss::MPVSS;
+pub use participant::Participant;
