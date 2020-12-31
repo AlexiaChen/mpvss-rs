@@ -1,4 +1,4 @@
-// Copyright 2020 The MPVSS Authors.
+// Copyright 2020-2021 The MPVSS Authors.
 //
 // Code is licensed under AGPL License, Version 3.0.
 
@@ -217,44 +217,6 @@ impl MPVSS {
                 denominator = denominator / gcd.clone();
             }
         }
-
-        // for (position, share) in shares {
-        //     var exponent = Bignum(1)
-        //     let lagrangeCoefficient = PVSSInstance.lagrangeCoefficient(i: position, values: values)
-        //     if lagrangeCoefficient.numerator % lagrangeCoefficient.denominator == 0 {
-        //       // Lagrange coefficient is an integer
-        //       exponent = lagrangeCoefficient.numerator / lagrangeCoefficient.denominator.abs
-        //     } else {
-        //       // Lagrange coefficient is a proper fraction
-        //       // Cancel fraction if possible
-        //       var numerator = BigUInt(lagrangeCoefficient.numerator.description)!
-        //       var denominator = BigUInt(lagrangeCoefficient.denominator.abs.description)!
-        //       let gcd = numerator.greatestCommonDivisor(with: denominator)
-        //       numerator = numerator.quotientAndRemainder(dividingBy: gcd).quotient
-        //       denominator = denominator.quotientAndRemainder(dividingBy: gcd).quotient
-        //       let q1 = BigUInt((self.q - 1).description)!
-        //       if let inverseDenominator = denominator.inverse(q1) {
-        //         exponent = Bignum(((numerator * inverseDenominator) % q1).description)
-        //       } else {
-        //         print("ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed.")
-        //       }
-        //     }
-        //     var factor = BigUInt((mod_exp(share, exponent, self.q)).description)!
-        //     if lagrangeCoefficient.numerator * lagrangeCoefficient.denominator < 0 {
-        //       // Lagrange coefficient was negative. S^(-lambda) = 1/(S^lambda)
-        //       if let inverseFactor = factor.inverse(BigUInt(self.q.description)!) {
-        //         factor = inverseFactor
-        //       } else {
-        //         print("ERROR: Lagrange coefficient was negative and does not have an inverse. Share cannot be processed.")
-        //       }
-        //     }
-        //     secret = (secret * Bignum(factor.description)) % self.q
-        //   }
-        //   // Recover the secret sigma = H(G^s) XOR U
-        //   let sharedSecretHash = secret.description.sha256()
-        //   let hashInt = BigUInt(sharedSecretHash, radix: 16)! % BigUInt(q.description)!
-        //   let decryptedSecret = hashInt ^ BigUInt(distributionBundle.U.description)!
-        //   return Bignum(decryptedSecret.description)
 
         None
     }
