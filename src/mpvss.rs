@@ -6,12 +6,14 @@
 
 use crate::dleq::DLEQ;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
-use num_bigint::{BigUint, RandBigInt};
+use crate::util::Util;
+use num_bigint::{BigInt, BigUint, RandBigInt};
 use num_integer::Integer;
 use num_primes::Generator;
-use num_traits::identities::One;
+use num_traits::identities::{One, Zero};
 use sha2::{Digest, Sha256};
 use std::clone::Clone;
+use std::collections::HashMap;
 
 /// 2048-bit MODP Group
 /// New Modular Exponential (MODP) Diffie-Hellman groups
@@ -177,6 +179,84 @@ impl MPVSS {
 
         // Calculate challenge and check if it is match c
         dleq.check(&challenge_hasher)
+    }
+
+    /// Reconstruct secret from share boxs
+    ///
+    pub fn reconstruct(
+        &self,
+        share_boxs: &[ShareBox],
+        distribute_share_box: &DistributionSharesBox,
+    ) -> Option<BigUint> {
+        if share_boxs.len() < distribute_share_box.commitments.len() {
+            return None;
+        }
+        let mut shares: HashMap<i64, BigUint> = HashMap::new();
+        for share_box in share_boxs.iter() {
+            let position = distribute_share_box.positions.get(&share_box.publickey);
+            if position.is_none() {
+                return None;
+            }
+            shares.insert(*position.unwrap(), share_box.share.clone());
+        }
+        let mut secret: BigUint = BigUint::one();
+        let mut values: Vec<i64> = shares.keys().map(|key| *key).collect();
+        for (position, share) in shares {
+            let mut exponent = BigInt::one();
+            let lagrangeCoefficient = Util::lagrange_coefficient(&position, values.as_slice());
+            if lagrangeCoefficient.0.clone() % lagrangeCoefficient.1.clone() == BigInt::zero() {
+                // Lagrange coefficient is an integer
+                exponent = lagrangeCoefficient.0.clone() / Util::abs(&lagrangeCoefficient.1);
+            } else {
+                // Lagrange coefficient is a proper fraction
+                // Cancel fraction if possible
+                let mut numerator = lagrangeCoefficient.0.to_biguint().unwrap();
+                let mut denominator = Util::abs(&lagrangeCoefficient.1).to_biguint().unwrap();
+                let gcd = numerator.gcd(&denominator);
+                numerator = numerator / gcd.clone();
+                denominator = denominator / gcd.clone();
+            }
+        }
+
+        // for (position, share) in shares {
+        //     var exponent = Bignum(1)
+        //     let lagrangeCoefficient = PVSSInstance.lagrangeCoefficient(i: position, values: values)
+        //     if lagrangeCoefficient.numerator % lagrangeCoefficient.denominator == 0 {
+        //       // Lagrange coefficient is an integer
+        //       exponent = lagrangeCoefficient.numerator / lagrangeCoefficient.denominator.abs
+        //     } else {
+        //       // Lagrange coefficient is a proper fraction
+        //       // Cancel fraction if possible
+        //       var numerator = BigUInt(lagrangeCoefficient.numerator.description)!
+        //       var denominator = BigUInt(lagrangeCoefficient.denominator.abs.description)!
+        //       let gcd = numerator.greatestCommonDivisor(with: denominator)
+        //       numerator = numerator.quotientAndRemainder(dividingBy: gcd).quotient
+        //       denominator = denominator.quotientAndRemainder(dividingBy: gcd).quotient
+        //       let q1 = BigUInt((self.q - 1).description)!
+        //       if let inverseDenominator = denominator.inverse(q1) {
+        //         exponent = Bignum(((numerator * inverseDenominator) % q1).description)
+        //       } else {
+        //         print("ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed.")
+        //       }
+        //     }
+        //     var factor = BigUInt((mod_exp(share, exponent, self.q)).description)!
+        //     if lagrangeCoefficient.numerator * lagrangeCoefficient.denominator < 0 {
+        //       // Lagrange coefficient was negative. S^(-lambda) = 1/(S^lambda)
+        //       if let inverseFactor = factor.inverse(BigUInt(self.q.description)!) {
+        //         factor = inverseFactor
+        //       } else {
+        //         print("ERROR: Lagrange coefficient was negative and does not have an inverse. Share cannot be processed.")
+        //       }
+        //     }
+        //     secret = (secret * Bignum(factor.description)) % self.q
+        //   }
+        //   // Recover the secret sigma = H(G^s) XOR U
+        //   let sharedSecretHash = secret.description.sha256()
+        //   let hashInt = BigUInt(sharedSecretHash, radix: 16)! % BigUInt(q.description)!
+        //   let decryptedSecret = hashInt ^ BigUInt(distributionBundle.U.description)!
+        //   return Bignum(decryptedSecret.description)
+
+        None
     }
 }
 

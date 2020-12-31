@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use num_bigint::BigInt;
+use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::identities::{One, Zero};
 use std::clone::Clone;
 
@@ -44,7 +44,7 @@ impl Util {
     ///
     /// where λ_i= ∏ j≠i = j/(j−i) is a Lagrange coefficient.
     /// 1 <= i <= threshold  0 <= j < threshold
-    pub fn lagrange_coefficient(i: &i32, values: &[i32]) -> (BigInt, BigInt) {
+    pub fn lagrange_coefficient(i: &i64, values: &[i64]) -> (BigInt, BigInt) {
         if !values.contains(i) {
             return (BigInt::zero(), BigInt::one());
         }
@@ -61,6 +61,15 @@ impl Util {
             }
         }
         return (numerator, denominator);
+    }
+
+    /// return abs value
+    pub fn abs(n: &BigInt) -> BigInt {
+        match n.sign() {
+            Sign::Minus => BigInt::new(Sign::Plus, n.to_u32_digits().1),
+            Sign::Plus => n.clone(),
+            Sign::NoSign => n.clone(),
+        }
     }
 }
 
@@ -127,5 +136,22 @@ mod tests {
         // 0..=6 j/(j-3) =  (1/-2) * (2/-1) * (4/1) * (5/2) * (6/3) = 240 / 12
         let result = Util::lagrange_coefficient(&i_array[3], &values);
         assert_eq!(result, (BigInt::from(240), BigInt::from(12)));
+    }
+
+    #[test]
+    fn test_abs() {
+        use super::BigInt;
+        use super::Util;
+        let minus = BigInt::from(-100);
+        assert_eq!(Util::abs(&minus), BigInt::from(100));
+
+        let minus = BigInt::from(-0);
+        assert_eq!(Util::abs(&minus), BigInt::from(0));
+
+        let plus = BigInt::from(0);
+        assert_eq!(Util::abs(&plus), BigInt::from(0));
+
+        let plus = BigInt::from(100);
+        assert_eq!(Util::abs(&plus), BigInt::from(100));
     }
 }
