@@ -40,7 +40,7 @@ impl Participant {
     /// Initializes a new participant with the default MPVSS.
     pub fn initialize(&mut self) {
         self.privatekey = self.mpvss.generate_private_key();
-        self.publickey = self.mpvss.generate_public_key(&self.publickey);
+        self.publickey = self.mpvss.generate_public_key(&self.privatekey);
     }
 
     /// Takes a secret as input and returns the distribution shares Box which is going to be submitted to all the participants the secret is going to be shared with.
