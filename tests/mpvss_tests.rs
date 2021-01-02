@@ -3,7 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use mpvss_rs::Participant;
-use num_bigint::BigUint;
+use num_bigint::{BigUint, ToBigInt};
 
 #[test]
 fn test_secret_str_utf8() {
@@ -35,8 +35,11 @@ fn test_mpvss_distribute_verify() {
     println!("p2 pubkey: {}", p2.publickey.to_str_radix(16));
     println!("p3 pubkey: {}", p3.publickey.to_str_radix(16));
 
-    let distribute_shares_box =
-        dealer.distribute_secret(secret, vec![p1.publickey, p2.publickey, p3.publickey], 3);
+    let distribute_shares_box = dealer.distribute_secret(
+        secret.to_bigint().unwrap(),
+        vec![p1.publickey, p2.publickey, p3.publickey],
+        3,
+    );
 
     assert_eq!(
         p1.mpvss.verify_distribution_shares(&distribute_shares_box),

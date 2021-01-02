@@ -4,36 +4,30 @@
 
 #![allow(non_snake_case)]
 
-use num_bigint::BigUint;
+use num_bigint::BigInt;
 use num_traits::identities::Zero;
 use std::collections::HashMap;
 use std::vec::Vec;
 
 #[derive(Debug, Clone)]
 pub struct ShareBox {
-    pub publickey: BigUint,
-    pub share: BigUint,
-    pub challenge: BigUint,
-    pub response: BigUint,
+    pub publickey: BigInt,
+    pub share: BigInt,
+    pub challenge: BigInt,
+    pub response: BigInt,
 }
 
 impl ShareBox {
     pub fn new() -> Self {
         return ShareBox {
-            publickey: BigUint::zero(),
-            share: BigUint::zero(),
-            challenge: BigUint::zero(),
-            response: BigUint::zero(),
+            publickey: BigInt::zero(),
+            share: BigInt::zero(),
+            challenge: BigInt::zero(),
+            response: BigInt::zero(),
         };
     }
 
-    pub fn init(
-        &mut self,
-        publickey: BigUint,
-        share: BigUint,
-        challenge: BigUint,
-        response: BigUint,
-    ) {
+    pub fn init(&mut self, publickey: BigInt, share: BigInt, challenge: BigInt, response: BigInt) {
         self.publickey = publickey;
         self.share = share;
         self.challenge = challenge;
@@ -44,13 +38,13 @@ impl ShareBox {
 /// the  dealer  wishes to distribute a secret among participants P1,...,Pn.
 /// The dealer picks a randompolynomialp of degree at most t−1 with coefficients in Z_q
 pub struct DistributionSharesBox {
-    pub commitments: Vec<BigUint>,
-    pub positions: HashMap<BigUint, i64>,
-    pub shares: HashMap<BigUint, BigUint>,
-    pub publickeys: Vec<BigUint>,
-    pub challenge: BigUint,
-    pub responses: HashMap<BigUint, BigUint>,
-    pub U: BigUint,
+    pub commitments: Vec<BigInt>,
+    pub positions: HashMap<BigInt, i64>,
+    pub shares: HashMap<BigInt, BigInt>,
+    pub publickeys: Vec<BigInt>,
+    pub challenge: BigInt,
+    pub responses: HashMap<BigInt, BigInt>,
+    pub U: BigInt,
 }
 
 impl DistributionSharesBox {
@@ -60,21 +54,21 @@ impl DistributionSharesBox {
             positions: HashMap::new(),
             shares: HashMap::new(),
             publickeys: Vec::new(),
-            challenge: BigUint::zero(),
+            challenge: BigInt::zero(),
             responses: HashMap::new(),
-            U: BigUint::zero(),
+            U: BigInt::zero(),
         };
     }
 
     pub fn init(
         &mut self,
-        commitments: Vec<BigUint>,
-        positions: HashMap<BigUint, i64>,
-        shares: HashMap<BigUint, BigUint>,
-        publickeys: Vec<BigUint>,
-        challenge: BigUint,
-        responses: HashMap<BigUint, BigUint>,
-        U: BigUint,
+        commitments: Vec<BigInt>,
+        positions: HashMap<BigInt, i64>,
+        shares: HashMap<BigInt, BigInt>,
+        publickeys: Vec<BigInt>,
+        challenge: BigInt,
+        responses: HashMap<BigInt, BigInt>,
+        U: BigInt,
     ) {
         self.commitments = commitments;
         self.positions = positions;

@@ -9,7 +9,7 @@ use crate::mpvss::MPVSS;
 use crate::polynomial::Polynomial;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
 use crate::util::Util;
-use num_bigint::{BigUint, RandBigInt, ToBigInt, ToBigUint};
+use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt, ToBigUint};
 use num_integer::Integer;
 use num_primes::Generator;
 use num_traits::identities::{One, Zero};
@@ -24,8 +24,8 @@ use std::option::Option;
 #[derive(Debug, Clone)]
 pub struct Participant {
     pub mpvss: MPVSS,
-    pub privatekey: BigUint,
-    pub publickey: BigUint,
+    pub privatekey: BigInt,
+    pub publickey: BigInt,
 }
 
 impl Participant {
@@ -33,8 +33,8 @@ impl Participant {
     pub fn new() -> Self {
         return Participant {
             mpvss: MPVSS::new(),
-            privatekey: BigUint::zero(),
-            publickey: BigUint::zero(),
+            privatekey: BigInt::zero(),
+            publickey: BigInt::zero(),
         };
     }
     /// Initializes a new participant with the default MPVSS.
@@ -60,24 +60,24 @@ impl Participant {
     /// - Returns: The distribution shares box that is published so everyone (especially but not only the participants) can check the shares' integrity. Furthermore the participants extract their shares from it.
     pub fn distribute(
         &mut self,
-        secret: BigUint,
-        publickeys: Vec<BigUint>,
+        secret: BigInt,
+        publickeys: Vec<BigInt>,
         threshold: u32,
         polynomial: Polynomial,
-        w: BigUint,
+        w: BigInt,
     ) -> DistributionSharesBox {
         assert!(threshold <= publickeys.len() as u32);
         // Data the distribution shares box is going to be consisting of
-        let mut commitments: Vec<BigUint> = Vec::new();
-        let mut positions: HashMap<BigUint, i64> = HashMap::new();
-        let mut X: HashMap<BigUint, BigUint> = HashMap::new();
-        let mut shares: HashMap<BigUint, BigUint> = HashMap::new();
+        let mut commitments: Vec<BigInt> = Vec::new();
+        let mut positions: HashMap<BigInt, i64> = HashMap::new();
+        let mut X: HashMap<BigInt, BigInt> = HashMap::new();
+        let mut shares: HashMap<BigInt, BigInt> = HashMap::new();
         let mut challenge_hasher = Sha256::new();
 
         // Temp variable
-        let mut sampling_points: HashMap<BigUint, BigUint> = HashMap::new();
-        let mut a: HashMap<BigUint, (BigUint, BigUint)> = HashMap::new();
-        let mut dleq_w: HashMap<BigUint, BigUint> = HashMap::new();
+        let mut sampling_points: HashMap<BigInt, BigInt> = HashMap::new();
+        let mut a: HashMap<BigInt, (BigInt, BigInt)> = HashMap::new();
+        let mut dleq_w: HashMap<BigInt, BigInt> = HashMap::new();
         let mut position: i64 = 1;
 
         // Calculate Ploynomial Coefficients Commitments C_j = g^(a_j) under group of prime q, and  0 <= j < threshold
@@ -98,21 +98,18 @@ impl Participant {
         // Y_i is encrypted secret share
         for pubkey in publickeys.clone() {
             positions.insert(pubkey.clone(), position);
-            // calc P(position % (q - 1)), from P(1) to P(n), actually is from share 1 to share n
-            let secret_share = polynomial.get_value(
-                BigUint::from(position as u64).mod_floor(&(self.mpvss.q.clone() - BigUint::one())),
-            );
+            // calc P(position) % (q - 1), from P(1) to P(n), actually is from share 1 to share n
+            let secret_share = polynomial.get_value(BigInt::from(position))
+                % (self.mpvss.q.clone() - BigInt::one());
             sampling_points.insert(pubkey.clone(), secret_share.clone());
 
             // Calc X_i
-            let mut x: BigUint = BigUint::one();
-            let mut exponent: BigUint = BigUint::one();
+            let mut x: BigInt = BigInt::one();
+            let mut exponent: BigInt = BigInt::one();
             for j in 0..=threshold - 1 {
                 x = x * commitments[j as usize].modpow(&exponent, &self.mpvss.q);
-                exponent = BigUint::from(position as u64).modpow(
-                    &j.to_biguint().unwrap(),
-                    &(self.mpvss.q.clone() - BigUint::one()),
-                )
+                exponent =
+                    (exponent * BigInt::from(position)) % (self.mpvss.q.clone() - BigInt::one());
             }
 
             X.insert(pubkey.clone(), x.clone());
@@ -141,20 +138,20 @@ impl Participant {
 
             // Update challenge hash
             // the challenge c for the protocol is computed as a cryptographic hash of X_i,Y_i,a_1i,a_2i, 1 <= i <= n
-            challenge_hasher.update(x.to_bytes_le());
-            challenge_hasher.update(encrypted_secret_share.to_bytes_le());
-            challenge_hasher.update(dleq.get_a1().to_bytes_le());
-            challenge_hasher.update(dleq.get_a2().to_bytes_le());
+            challenge_hasher.update(x.to_biguint().unwrap().to_bytes_le());
+            challenge_hasher.update(encrypted_secret_share.to_biguint().unwrap().to_bytes_le());
+            challenge_hasher.update(dleq.get_a1().to_biguint().unwrap().to_bytes_le());
+            challenge_hasher.update(dleq.get_a2().to_biguint().unwrap().to_bytes_le());
             position += 1;
         } // end for participant's publickeys
 
         // the common challenge c
         let challenge_hash = challenge_hasher.finalize();
         let challenge_big_uint = BigUint::from_bytes_le(&challenge_hash[..])
-            .mod_floor(&(self.mpvss.q.clone() - BigUint::one()));
+            .mod_floor(&(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()));
 
         // Calc response r_i
-        let mut responses: HashMap<BigUint, BigUint> = HashMap::new();
+        let mut responses: HashMap<BigInt, BigInt> = HashMap::new();
         for pubkey in publickeys.clone() {
             // DLEQ(g1,h2,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,encrypted_secret_share_from_pubkey)
             let x_i = X.get(&pubkey).unwrap();
@@ -171,7 +168,7 @@ impl Participant {
                 secret_share.clone(),
                 w.clone(),
             );
-            dleq.c = Some(challenge_big_uint.clone());
+            dleq.c = Some(challenge_big_uint.clone().to_bigint().unwrap());
             let response = dleq.get_r().unwrap();
             responses.insert(pubkey.clone(), response);
         } // end for pubkeys Calc r_i
@@ -179,13 +176,14 @@ impl Participant {
         // Calc U = secret xor SHA256(G^s) = secret xor SHA256(G^p(0)), It is not present in the original paper.
         let shared_value = self.mpvss.G.modpow(
             &polynomial
-                .get_value(BigUint::zero())
-                .mod_floor(&(self.mpvss.q.clone() - BigUint::one())),
+                .get_value(BigInt::zero())
+                .mod_floor(&(self.mpvss.q.clone().to_bigint().unwrap() - BigInt::one())),
             &self.mpvss.q,
         );
-        let sha256_hash = sha2::Sha256::digest(&shared_value.to_bytes_le());
-        let hash_big_uint = BigUint::from_bytes_le(&sha256_hash[..]).mod_floor(&self.mpvss.q);
-        let U = secret ^ hash_big_uint;
+        let sha256_hash = sha2::Sha256::digest(&shared_value.to_biguint().unwrap().to_bytes_le());
+        let hash_big_uint =
+            BigUint::from_bytes_le(&sha256_hash[..]).mod_floor(&self.mpvss.q.to_biguint().unwrap());
+        let U = secret.to_biguint().unwrap() ^ hash_big_uint;
 
         // The proof consists of the common challenge c and the n responses r_i.
         let mut shares_box = DistributionSharesBox::new();
@@ -194,9 +192,9 @@ impl Participant {
             positions,
             shares,
             publickeys,
-            challenge_big_uint,
+            challenge_big_uint.to_bigint().unwrap(),
             responses,
-            U,
+            U.to_bigint().unwrap(),
         );
         shares_box
     }
@@ -213,16 +211,25 @@ impl Participant {
     /// - Returns: The distribution shares Box that is published to everyone (especially but not only the participants) can check the shares' integrity. Furthermore the participants extract their shares from it.
     pub fn distribute_secret(
         &mut self,
-        secret: BigUint,
-        publickeys: Vec<BigUint>,
+        secret: BigInt,
+        publickeys: Vec<BigInt>,
         threshold: u32,
     ) -> DistributionSharesBox {
         let mut polynomial = Polynomial::new();
-        polynomial.init((threshold - 1) as i32, self.mpvss.q.clone());
+        polynomial.init(
+            (threshold - 1) as i32,
+            self.mpvss.q.clone().to_bigint().unwrap(),
+        );
 
         let mut rng = rand::thread_rng();
-        let w: BigUint = rng.gen_biguint_below(&self.mpvss.q);
-        self.distribute(secret, publickeys, threshold, polynomial, w)
+        let w: BigUint = rng.gen_biguint_below(&self.mpvss.q.to_biguint().unwrap());
+        self.distribute(
+            secret,
+            publickeys,
+            threshold,
+            polynomial,
+            w.to_bigint().unwrap(),
+        )
     }
 
     /// Extracts the share from a given distribution shares box that is addressed to the calling participant.
@@ -238,8 +245,8 @@ impl Participant {
     pub fn extract_share(
         &mut self,
         shares_box: DistributionSharesBox,
-        private_key: BigUint,
-        w: BigUint,
+        private_key: BigInt,
+        w: BigInt,
     ) -> Option<ShareBox> {
         let public_key = self.mpvss.generate_public_key(&private_key);
         let encrypted_secret_share = shares_box.shares.get(&public_key).unwrap();
@@ -248,13 +255,8 @@ impl Participant {
         // Using its private key x_i, each participant finds the decrypted share S_i = G^p(i) from Y_i by computing S_i = Y_i^(1/x_i).
         // Y_i is encrypted share: Y_i = y_i^p(i)
         // find modular multiplicative inverses of private key
-        let privkey_inverse = Util::mod_inverse(
-            &private_key.to_bigint().unwrap(),
-            &self.mpvss.q.to_bigint().unwrap(),
-        )
-        .unwrap();
-        let decrypted_share =
-            encrypted_secret_share.modpow(&privkey_inverse.to_biguint().unwrap(), &self.mpvss.q);
+        let privkey_inverse = Util::mod_inverse(&private_key, &self.mpvss.q).unwrap();
+        let decrypted_share = encrypted_secret_share.modpow(&privkey_inverse, &self.mpvss.q);
 
         // To this end it suffices to prove knowledge of an α such that y_i= G^α and Y_i= S_i^α, which is accomplished by the non-interactive version of the protocol DLEQ(G,y_i,S_i,Y_i).
         // DLEQ(G,y_i,S_i,Y_i) => DLEQ(G, publickey, decrypted_share, encryted_share)
@@ -272,22 +274,22 @@ impl Participant {
         );
 
         let mut challenge_hasher = Sha256::new();
-        challenge_hasher.update(public_key.to_bytes_le());
-        challenge_hasher.update(encrypted_secret_share.to_bytes_le());
-        challenge_hasher.update(dleq.get_a1().to_bytes_le());
-        challenge_hasher.update(dleq.get_a2().to_bytes_le());
+        challenge_hasher.update(public_key.to_biguint().unwrap().to_bytes_le());
+        challenge_hasher.update(encrypted_secret_share.to_biguint().unwrap().to_bytes_le());
+        challenge_hasher.update(dleq.get_a1().to_biguint().unwrap().to_bytes_le());
+        challenge_hasher.update(dleq.get_a2().to_biguint().unwrap().to_bytes_le());
 
         // the challenge c
         let challenge_hash = challenge_hasher.finalize();
         let challenge_big_uint = BigUint::from_bytes_le(&challenge_hash[..])
-            .mod_floor(&(self.mpvss.q.clone() - BigUint::one()));
-        dleq.c = Some(challenge_big_uint.clone());
+            .mod_floor(&(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()));
+        dleq.c = Some(challenge_big_uint.clone().to_bigint().unwrap());
 
         let mut share_box = ShareBox::new();
         share_box.init(
             public_key,
             decrypted_share,
-            challenge_big_uint,
+            challenge_big_uint.clone().to_bigint().unwrap(),
             dleq.get_r().unwrap(),
         );
         Some(share_box)
@@ -305,9 +307,10 @@ impl Participant {
     pub fn extract_secret_share(
         &mut self,
         shares_box: DistributionSharesBox,
-        private_key: BigUint,
+        private_key: BigInt,
     ) -> Option<ShareBox> {
-        let w = Generator::new_uint(self.mpvss.length as usize).mod_floor(&self.mpvss.q);
-        self.extract_share(shares_box, private_key, w)
+        let w = Generator::new_uint(self.mpvss.length as usize)
+            .mod_floor(&self.mpvss.q.to_biguint().unwrap());
+        self.extract_share(shares_box, private_key, w.to_bigint().unwrap())
     }
 }

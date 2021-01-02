@@ -12,17 +12,17 @@ use std::option::Option;
 struct Prover {}
 
 impl Prover {
-    fn send(g: &BigUint, w: &BigUint, q: &BigUint) -> BigUint {
+    fn send(g: &BigInt, w: &BigInt, q: &BigInt) -> BigInt {
         g.modpow(w, q)
     }
 
-    fn response(w: &BigUint, alpha: &BigUint, c: &Option<BigUint>, q: &BigUint) -> Option<BigUint> {
+    fn response(w: &BigInt, alpha: &BigInt, c: &Option<BigInt>, q: &BigInt) -> Option<BigInt> {
         let response_r = match c {
             None => None,
             Some(c) => {
                 let r: BigInt = w.to_bigint().unwrap() - (alpha * c).to_bigint().unwrap();
                 let result = r.mod_floor(&(q.clone().to_bigint().unwrap() - BigInt::one()));
-                Some(result.to_biguint().unwrap())
+                Some(result)
             }
         };
         response_r
@@ -31,35 +31,35 @@ impl Prover {
 
 struct Verifier {}
 impl Verifier {
-    fn send() -> BigUint {
-        BigUint::zero()
+    fn send() -> BigInt {
+        BigInt::zero()
     }
-    fn check(c: &BigUint, q: &BigUint, challenge_hasher: &Sha256) -> bool {
+    fn check(c: &BigInt, q: &BigInt, challenge_hasher: &Sha256) -> bool {
         // Calculate challenge
         let challenge_hash = challenge_hasher.clone().finalize();
-        let challenge_big_uint =
-            BigUint::from_bytes_le(&challenge_hash[..]).mod_floor(&(q.clone() - BigUint::one()));
-        challenge_big_uint == *c
+        let challenge_big_uint = BigUint::from_bytes_le(&challenge_hash[..])
+            .mod_floor(&(q.clone().to_biguint().unwrap() - BigUint::one()));
+        challenge_big_uint == (*c).to_biguint().unwrap()
     }
 
     fn update(
-        g1: &BigUint,
-        h1: &BigUint,
-        g2: &BigUint,
-        h2: &BigUint,
-        response: &BigUint,
-        c: &BigUint,
-        q: &BigUint,
+        g1: &BigInt,
+        h1: &BigInt,
+        g2: &BigInt,
+        h2: &BigInt,
+        response: &BigInt,
+        c: &BigInt,
+        q: &BigInt,
         challenge_hasher: &mut Sha256,
     ) {
         // Calc a1 a2
         let a1 = (g1.modpow(response, q) * h1.modpow(c, q)) % q;
         let a2 = (g2.modpow(response, q) * h2.modpow(c, q)) % q;
         // Update hash
-        challenge_hasher.update(h1.to_bytes_le());
-        challenge_hasher.update(h2.to_bytes_le());
-        challenge_hasher.update(a1.to_bytes_le());
-        challenge_hasher.update(a2.to_bytes_le());
+        challenge_hasher.update(h1.to_biguint().unwrap().to_bytes_le());
+        challenge_hasher.update(h2.to_biguint().unwrap().to_bytes_le());
+        challenge_hasher.update(a1.to_biguint().unwrap().to_bytes_le());
+        challenge_hasher.update(a2.to_biguint().unwrap().to_bytes_le());
     }
 }
 
@@ -75,61 +75,61 @@ impl Verifier {
 /// - The verifier checks that a1 = (g1^r) * (h1^c) and a2 = (g2^r) * (h2^c).
 #[derive(Debug, Clone)]
 pub struct DLEQ {
-    pub g1: BigUint,
-    pub h1: BigUint,
-    pub g2: BigUint,
-    pub h2: BigUint,
+    pub g1: BigInt,
+    pub h1: BigInt,
+    pub g2: BigInt,
+    pub h2: BigInt,
 
-    pub w: BigUint,
-    pub q: BigUint,
-    pub alpha: BigUint,
-    pub c: Option<BigUint>,
-    pub a1: BigUint,
-    pub a2: BigUint,
-    pub r: Option<BigUint>,
+    pub w: BigInt,
+    pub q: BigInt,
+    pub alpha: BigInt,
+    pub c: Option<BigInt>,
+    pub a1: BigInt,
+    pub a2: BigInt,
+    pub r: Option<BigInt>,
 }
 
 impl DLEQ {
     /// new DLEQ instance
     pub fn new() -> Self {
         return DLEQ {
-            g1: BigUint::zero(),
-            h1: BigUint::zero(),
-            g2: BigUint::zero(),
-            h2: BigUint::zero(),
-            w: BigUint::zero(),
-            q: BigUint::zero(),
-            alpha: BigUint::zero(),
+            g1: BigInt::zero(),
+            h1: BigInt::zero(),
+            g2: BigInt::zero(),
+            h2: BigInt::zero(),
+            w: BigInt::zero(),
+            q: BigInt::zero(),
+            alpha: BigInt::zero(),
 
-            a1: BigUint::zero(),
-            a2: BigUint::zero(),
+            a1: BigInt::zero(),
+            a2: BigInt::zero(),
             c: None,
             r: None,
         };
     }
     pub fn init(
         &mut self,
-        g1: BigUint,
-        h1: BigUint,
-        g2: BigUint,
-        h2: BigUint,
+        g1: BigInt,
+        h1: BigInt,
+        g2: BigInt,
+        h2: BigInt,
         length: u32,
-        q: BigUint,
-        alpha: BigUint,
+        q: BigInt,
+        alpha: BigInt,
     ) {
-        let w: BigUint = Generator::new_prime(length as usize).mod_floor(&q);
-        self.init2(g1, h1, g2, h2, q, alpha, w);
+        let w: BigUint = Generator::new_prime(length as usize).mod_floor(&q.to_biguint().unwrap());
+        self.init2(g1, h1, g2, h2, q, alpha, w.to_bigint().unwrap());
     }
 
     pub fn init2(
         &mut self,
-        g1: BigUint,
-        h1: BigUint,
-        g2: BigUint,
-        h2: BigUint,
-        q: BigUint,
-        alpha: BigUint,
-        w: BigUint,
+        g1: BigInt,
+        h1: BigInt,
+        g2: BigInt,
+        h2: BigInt,
+        q: BigInt,
+        alpha: BigInt,
+        w: BigInt,
     ) {
         self.g1 = g1;
         self.h1 = h1;
@@ -141,22 +141,22 @@ impl DLEQ {
     }
 
     /// get a1 value
-    pub fn get_a1(&self) -> BigUint {
+    pub fn get_a1(&self) -> BigInt {
         Prover::send(&self.g1, &self.w, &self.q)
     }
 
     /// get a2 value
-    pub fn get_a2(&self) -> BigUint {
+    pub fn get_a2(&self) -> BigInt {
         Prover::send(&self.g2, &self.w, &self.q)
     }
 
     /// get response r value
-    pub fn get_r(&self) -> Option<BigUint> {
+    pub fn get_r(&self) -> Option<BigInt> {
         Prover::response(&self.w, &self.alpha, &self.c, &self.q)
     }
 
     /// send a random challenge c
-    pub fn get_c(&self) -> BigUint {
+    pub fn get_c(&self) -> BigInt {
         Verifier::send()
     }
 

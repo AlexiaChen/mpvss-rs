@@ -40,9 +40,9 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct MPVSS {
-    pub q: BigUint,
-    pub g: BigUint,
-    pub G: BigUint,
+    pub q: BigInt,
+    pub g: BigInt,
+    pub G: BigInt,
 
     pub length: u32,
 }
@@ -55,9 +55,9 @@ impl MPVSS {
         let q: BigUint = BigUint::parse_bytes(b"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece45b3dc2007cb8a163bf0598da48361c55d39a69163fa8fd24cf5f83655d23dca3ad961c62f356208552bb9ed529077096966d670c354e4abc9804f1746c08ca18217c32905e462e36ce3be39e772c180e86039b2783a2ec07a28fb5c55df06f4c52c9de2bcbf6955817183995497cea956ae515d2261898fa051015728e5a8aacaa68ffffffffffffffff", 16).unwrap();
         let g: BigUint = (q.clone() - BigUint::one()) / BigUint::from(2_u64);
         return MPVSS {
-            q: q,
-            g: g,
-            G: BigUint::from(2_u64),
+            q: q.to_bigint().unwrap(),
+            g: g.to_bigint().unwrap(),
+            G: BigInt::from(2_i64),
             length: 2048,
         };
     }
@@ -69,26 +69,28 @@ impl MPVSS {
         let q: BigUint = Generator::safe_prime(length as usize);
         let g: BigUint = (q.clone() - BigUint::one()) / BigUint::from(2_u64);
         return MPVSS {
-            q: q,
-            g: g,
-            G: BigUint::from(2_u64),
+            q: q.to_bigint().unwrap(),
+            g: g.to_bigint().unwrap(),
+            G: BigInt::from(2_i64),
             length: length,
         };
     }
 
-    pub fn generate_private_key(&self) -> BigUint {
+    pub fn generate_private_key(&self) -> BigInt {
         let mut rng = rand::thread_rng();
-        let mut privkey: BigUint = rng.gen_biguint_below(&self.q);
+        let mut privkey: BigUint = rng.gen_biguint_below(&self.q.to_biguint().unwrap());
         // We need the private key and q-1 to be coprime so that we can calculate 1/key mod (q-1) during secret reconstruction.
-        while privkey.gcd(&(self.q.clone() - BigUint::one())) != BigUint::one() {
-            privkey = rng.gen_biguint_below(&self.q);
+        while privkey.gcd(&(self.q.clone().to_biguint().unwrap() - BigUint::one()))
+            != BigUint::one()
+        {
+            privkey = rng.gen_biguint_below(&self.q.to_biguint().unwrap());
         }
-        privkey
+        privkey.to_bigint().unwrap()
     }
 
     /// generate public key from private key
     /// P = G^k over the Group of the order q
-    pub fn generate_public_key(&self, privkey: &BigUint) -> BigUint {
+    pub fn generate_public_key(&self, privkey: &BigInt) -> BigInt {
         // publicKey = G^privKey mod q
         self.G.modpow(privkey, &self.q)
     }
@@ -104,7 +106,7 @@ impl MPVSS {
         &self,
         sharebox: &ShareBox,
         distribution_sharebox: &DistributionSharesBox,
-        publickey: &BigUint,
+        publickey: &BigInt,
     ) -> bool {
         let encrypted_share = distribution_sharebox.shares.get(publickey);
         if encrypted_share.is_none() {
@@ -119,7 +121,7 @@ impl MPVSS {
     ///   - shareBox: The share box containing the share to be verified.
     ///   - encryptedShare: The encrypted share from the distribution share box.
     /// - Returns: Returns `true` if the share in the share box matches the decryption of the encrypted share and `false` otherwise.
-    pub fn verify(&self, sharebox: &ShareBox, encrypted_share: &BigUint) -> bool {
+    pub fn verify(&self, sharebox: &ShareBox, encrypted_share: &BigInt) -> bool {
         // Verification of the share.
         // Using publickey,encrypted_hsare,decrypted_share,response and c as input, the verifier computes a_1i,a_2i as:
         // a_1i = G^r * publickey^c,   a_2i = decrypted_shar^r * encrypted_share^c
@@ -158,12 +160,12 @@ impl MPVSS {
             }
 
             // Calculate X_i
-            let mut x: BigUint = BigUint::one();
-            let mut exponent: BigUint = BigUint::one();
+            let mut x: BigInt = BigInt::one();
+            let mut exponent: BigInt = BigInt::one();
             for j in 0..distribute_sharesbox.commitments.len() {
                 x = (x * distribute_sharesbox.commitments[j].modpow(&exponent, &self.q)) % &self.q;
-                exponent = (exponent * BigUint::from(position.unwrap().clone() as u64))
-                    % &(self.q.clone() - BigUint::one());
+                exponent = (exponent * BigInt::from(position.unwrap().clone() as i64))
+                    % &(self.q.clone() - BigInt::one());
             }
 
             // Calculate a_1i, a_2i and update hash
@@ -187,11 +189,11 @@ impl MPVSS {
         &self,
         share_boxs: &[ShareBox],
         distribute_share_box: &DistributionSharesBox,
-    ) -> Option<BigUint> {
+    ) -> Option<BigInt> {
         if share_boxs.len() < distribute_share_box.commitments.len() {
             return None;
         }
-        let mut shares: HashMap<i64, BigUint> = HashMap::new();
+        let mut shares: HashMap<i64, BigInt> = HashMap::new();
         for share_box in share_boxs.iter() {
             let position = distribute_share_box.positions.get(&share_box.publickey);
             if position.is_none() {
@@ -203,7 +205,7 @@ impl MPVSS {
         // w.l.o.g.  that  participantsPiproduce  correctvalues for S_i, for i= 1,...,t.
         // The secret G^s is obtained by Lagrange interpolation:
         // ∏(i=1->t)(S^λ_i) = ∏(i=1->t)(G^p(i))^λ_i = G^(∑(i=1->t)p(i)*λ_i = G^p(0) = G^s,
-        let mut secret: BigUint = BigUint::one();
+        let mut secret: BigInt = BigInt::one();
         let values: Vec<i64> = shares.keys().map(|key| *key).collect();
         for (position, share) in shares {
             let mut exponent = BigInt::one();
@@ -220,7 +222,7 @@ impl MPVSS {
                 numerator = numerator / gcd.clone();
                 denominator = denominator / gcd.clone();
 
-                let q1 = self.q.clone() - BigUint::one();
+                let q1 = self.q.clone() - BigInt::one();
                 let inverseDenominator =
                     Util::mod_inverse(&denominator.to_bigint().unwrap(), &q1.to_bigint().unwrap());
                 if inverseDenominator.is_some() {
@@ -243,14 +245,15 @@ impl MPVSS {
                     println!("ERROR: Lagrange coefficient was negative and does not have an inverse. Share cannot be processed.")
                 }
             }
-            secret = (secret * factor.to_biguint().unwrap()) % self.q.clone();
+            secret = (secret * factor) % self.q.clone();
         }
 
         // Reconstruct the secret = H(G^s) xor U
-        let secret_hash = sha2::Sha256::digest(&secret.to_bytes_le());
-        let hash_big_uint = BigUint::from_bytes_le(&secret_hash[..]).mod_floor(&self.q);
-        let decrypted_secret = hash_big_uint ^ distribute_share_box.U.clone();
-        Some(decrypted_secret)
+        let secret_hash = sha2::Sha256::digest(&secret.to_biguint().unwrap().to_bytes_le());
+        let hash_big_uint =
+            BigUint::from_bytes_le(&secret_hash[..]).mod_floor(&self.q.to_biguint().unwrap());
+        let decrypted_secret = hash_big_uint ^ distribute_share_box.U.clone().to_biguint().unwrap();
+        Some(decrypted_secret.to_bigint().unwrap())
     }
 }
 
@@ -262,9 +265,9 @@ mod tests {
         use num_primes::Verification;
 
         let mpvss = MPVSS::new();
-        assert!(Verification::is_safe_prime(&mpvss.q));
-        assert!(Verification::is_prime(&mpvss.g));
-        assert!(!Verification::is_safe_prime(&mpvss.g));
+        assert!(Verification::is_safe_prime(&mpvss.q.to_biguint().unwrap()));
+        assert!(Verification::is_prime(&mpvss.g.to_biguint().unwrap()));
+        assert!(!Verification::is_safe_prime(&mpvss.g.to_biguint().unwrap()));
     }
 
     #[test]
@@ -272,25 +275,25 @@ mod tests {
         use super::MPVSS;
         use num_primes::Verification;
         let mpvss = MPVSS::init(64);
-        assert!(Verification::is_safe_prime(&mpvss.q));
-        assert!(Verification::is_prime(&mpvss.g));
-        assert!(!Verification::is_safe_prime(&mpvss.g));
+        assert!(Verification::is_safe_prime(&mpvss.q.to_biguint().unwrap()));
+        assert!(Verification::is_prime(&mpvss.g.to_biguint().unwrap()));
+        assert!(!Verification::is_safe_prime(&mpvss.g.to_biguint().unwrap()));
     }
 
     #[test]
     fn test_gen_priv_key() {
         use super::MPVSS;
         use super::*;
-        use num_bigint::BigUint;
+        use num_bigint::BigInt;
         use num_integer::Integer;
         use num_primes::Verification;
         let mut mpvss = MPVSS::new();
-        mpvss.q = BigUint::from(49999_u32);
-        assert!(Verification::is_prime(&mpvss.q));
+        mpvss.q = BigInt::from(49999_i32);
+        assert!(Verification::is_prime(&mpvss.q.to_biguint().unwrap()));
         let priv_key = mpvss.generate_private_key();
         assert_eq!(
-            priv_key.gcd(&(mpvss.q.clone() - BigUint::one())),
-            BigUint::one()
+            priv_key.gcd(&(mpvss.q.clone() - BigInt::one())),
+            BigInt::one()
         );
     }
 }
