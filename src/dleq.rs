@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use num_bigint::BigUint;
+use num_bigint::{BigInt, BigUint, ToBigInt, ToBigUint};
 use num_integer::Integer;
 use num_primes::Generator;
 use num_traits::identities::{One, Zero};
@@ -20,8 +20,9 @@ impl Prover {
         let response_r = match c {
             None => None,
             Some(c) => {
-                let r: BigUint = w - alpha * c;
-                Some(r.mod_floor(&(q.clone() - BigUint::one())))
+                let r: BigInt = w.to_bigint().unwrap() - (alpha * c).to_bigint().unwrap();
+                let result = r.mod_floor(&(q.clone().to_bigint().unwrap() - BigInt::one()));
+                Some(result.to_biguint().unwrap())
             }
         };
         response_r
