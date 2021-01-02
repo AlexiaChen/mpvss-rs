@@ -5,9 +5,9 @@
 pub mod dleq;
 pub mod mpvss;
 pub mod participant;
-pub mod polynomial;
+mod polynomial;
 pub mod sharebox;
-pub mod util;
+mod util;
 
 pub use mpvss::MPVSS;
 pub use participant::Participant;
