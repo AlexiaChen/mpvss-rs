@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt};
+use num_bigint::{BigInt, RandBigInt, ToBigInt};
 use num_traits::pow::Pow;
 use std::clone::Clone;
 use std::ops::*;

@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use num_bigint::{BigInt, Sign};
+use num_bigint::{BigInt, BigUint, Sign, ToBigUint};
 use num_traits::identities::{One, Zero};
 use std::clone::Clone;
 
@@ -136,6 +136,9 @@ mod tests {
         // 0..=6 j/(j-3) =  (1/-2) * (2/-1) * (4/1) * (5/2) * (6/3) = 240 / 12
         let result = Util::lagrange_coefficient(&i_array[3], &values);
         assert_eq!(result, (BigInt::from(240), BigInt::from(12)));
+
+        let result = Util::lagrange_coefficient(&3, &[1, 3, 4]);
+        assert_eq!(result, (BigInt::from(4), BigInt::from(-2)));
     }
 
     #[test]
@@ -153,5 +156,45 @@ mod tests {
 
         let plus = BigInt::from(100);
         assert_eq!(Util::abs(&plus), BigInt::from(100));
+    }
+
+    #[test]
+    fn test_xor() {
+        use super::BigUint;
+        let a = BigUint::from(1337_u32);
+        let b = BigUint::from(42_u32);
+        let xor = a ^ b;
+        assert_eq!(xor, BigUint::from(1299_u32));
+    }
+
+    #[test]
+    fn test_hash() {
+        use super::{BigInt, BigUint, ToBigUint};
+        use num_traits::Num;
+        use sha2::{Digest, Sha256};
+
+        let mut sha256 = Sha256::new();
+        let value_1 = BigInt::from_str_radix("43589072349864890574839", 10).unwrap();
+        let value_2 = BigInt::from_str_radix("14735247304952934566", 10).unwrap();
+        let value_1_uint = value_1.to_biguint().unwrap();
+        let value_2_uint = value_2.to_biguint().unwrap();
+        sha256.update(value_1_uint.to_str_radix(10).as_bytes());
+        sha256.update(value_2_uint.to_str_radix(10).as_bytes());
+
+        let result = sha256.finalize();
+        let challenge_big_uint = BigUint::from_bytes_be(&result[..]);
+
+        assert_eq!(
+            challenge_big_uint.to_str_radix(16),
+            "e25e5b7edf4ea66e5238393fb4f183e0fc1593c69a522f9255a51bd0bc2b7ba7"
+        );
+
+        assert_eq!(
+            BigInt::from_str_radix(&challenge_big_uint.to_str_radix(16), 16),
+            BigInt::from_str_radix(
+                "102389418883295205726805934198606438410316463205994911160958467170744727731111",
+                10
+            )
+        );
     }
 }

@@ -178,3 +178,46 @@ impl DLEQ {
         Verifier::check(&self.c.clone().unwrap(), &self.q, challenge_hasher)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_dleq() {
+        use super::DLEQ;
+        use num_bigint::BigInt;
+
+        let g1 = BigInt::from(8443);
+        let h1 = BigInt::from(531216);
+        let g2 = BigInt::from(1299721);
+        let h2 = BigInt::from(14767239);
+        let w = BigInt::from(81647);
+        let q = BigInt::from(15487469);
+        let alpha = BigInt::from(163027);
+        let length = 64_i64;
+
+        let mut dleq = DLEQ::new();
+        dleq.init2(g1, h1, g2, h2, q.clone(), alpha, w);
+
+        let a1 = BigInt::from(14735247);
+        let a2 = BigInt::from(5290058);
+        assert_eq!(dleq.get_a1(), a1);
+        assert_eq!(dleq.get_a2(), a2);
+
+        let c = BigInt::from(127997);
+        dleq.c = Some(c);
+        let r = BigInt::from(10221592);
+        assert_eq!(r, dleq.get_r().unwrap());
+        assert_eq!(
+            a1,
+            (dleq.g1.modpow(&dleq.get_r().unwrap(), &dleq.q)
+                * dleq.h1.modpow(&dleq.c.clone().unwrap(), &dleq.q))
+                % q.clone()
+        );
+        assert_eq!(
+            a2,
+            (dleq.g2.modpow(&dleq.get_r().unwrap(), &dleq.q)
+                * dleq.h2.modpow(&dleq.c.clone().unwrap(), &dleq.q))
+                % q.clone()
+        )
+    }
+}

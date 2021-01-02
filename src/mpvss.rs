@@ -273,11 +273,22 @@ mod tests {
     #[test]
     fn test_init() {
         use super::MPVSS;
+        use super::{BigInt, BigUint, One, ToBigInt};
         use num_primes::Verification;
         let mpvss = MPVSS::init(64);
         assert!(Verification::is_safe_prime(&mpvss.q.to_biguint().unwrap()));
         assert!(Verification::is_prime(&mpvss.g.to_biguint().unwrap()));
         assert!(!Verification::is_safe_prime(&mpvss.g.to_biguint().unwrap()));
+
+        let mpvss = MPVSS::init(32);
+        assert!(Verification::is_prime(&mpvss.q.to_biguint().unwrap()));
+        assert!(Verification::is_prime(&mpvss.g.to_biguint().unwrap()));
+        assert_eq!(
+            mpvss.g,
+            ((mpvss.q - BigInt::one()).to_biguint().unwrap() / BigUint::from(2_u32))
+                .to_bigint()
+                .unwrap()
+        )
     }
 
     #[test]
@@ -295,5 +306,25 @@ mod tests {
             priv_key.gcd(&(mpvss.q.clone() - BigInt::one())),
             BigInt::one()
         );
+    }
+
+    #[test]
+    fn test_gen_public_key() {
+        use super::BigInt;
+        use super::MPVSS;
+        let q: BigInt = BigInt::from(179426549);
+        let g: BigInt = BigInt::from(1301081);
+        let G: BigInt = BigInt::from(15486487);
+
+        let length = 64_i64;
+
+        let mut mpvss = MPVSS::new();
+        mpvss.q = q;
+        mpvss.g = g;
+        mpvss.G = G;
+
+        let privatekey = BigInt::from(105929);
+        let publickey = mpvss.generate_public_key(&privatekey);
+        assert_eq!(publickey, BigInt::from(148446388));
     }
 }
