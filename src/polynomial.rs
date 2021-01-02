@@ -110,4 +110,24 @@ mod tests {
             BigInt::from(135_i32)
         );
     }
+
+    #[test]
+    fn test_get_value2() {
+        use super::BigInt;
+        use super::Polynomial;
+
+        let q: BigInt = BigInt::from(15486967);
+        let coefficients = vec![
+            BigInt::from(105211),
+            BigInt::from(1548877),
+            BigInt::from(892134),
+            BigInt::from(3490857),
+            BigInt::from(324),
+            BigInt::from(14234735),
+        ];
+        let x: BigInt = BigInt::from(278);
+        let mut polynomial = Polynomial::new();
+        polynomial.init_coefficients(coefficients);
+        assert_eq!(polynomial.get_value(x) % q, BigInt::from(4115179));
+    }
 }

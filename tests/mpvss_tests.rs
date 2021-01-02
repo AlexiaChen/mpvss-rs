@@ -3,7 +3,13 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use mpvss_rs::Participant;
-use num_bigint::{BigUint, ToBigInt};
+use num_bigint::{BigInt, BigUint, ToBigInt};
+
+fn setup() {
+    let q: BigInt = BigInt::from(179426549);
+    let g: BigInt = BigInt::from(1301081);
+    let G: BigInt = BigInt::from(15486487);
+}
 
 #[test]
 fn test_secret_str_utf8() {
