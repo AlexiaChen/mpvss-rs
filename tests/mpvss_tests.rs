@@ -32,10 +32,6 @@ fn test_mpvss_distribute_verify() {
     p2.initialize();
     p3.initialize();
 
-    println!("p1 pubkey: {}", p1.publickey.to_str_radix(16));
-    println!("p2 pubkey: {}", p2.publickey.to_str_radix(16));
-    println!("p3 pubkey: {}", p3.publickey.to_str_radix(16));
-
     let distribute_shares_box = dealer.distribute_secret(
         secret.to_bigint().unwrap(),
         vec![p1.publickey, p2.publickey, p3.publickey],
