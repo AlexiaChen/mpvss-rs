@@ -41,10 +41,6 @@ let mut p1 = Participant::new();
 let mut p2 = Participant::new();
 let mut p3 = Participant::new();
 
-p1.mpvss = dealer.mpvss.clone();
-p2.mpvss = dealer.mpvss.clone();
-p3.mpvss = dealer.mpvss.clone();
-
 p1.initialize();
 p2.initialize();
 p3.initialize();

@@ -4,7 +4,6 @@
 
 use num_bigint::{BigInt, RandBigInt, ToBigInt};
 use num_traits::pow::Pow;
-use num_traits::One;
 use std::clone::Clone;
 use std::ops::*;
 use std::vec::Vec;
@@ -110,9 +109,6 @@ mod tests {
 
     #[test]
     fn test_get_value2() {
-        use super::BigInt;
-        use super::Polynomial;
-
         let q: BigInt = BigInt::from(15486967);
         let coefficients = vec![
             BigInt::from(105211),

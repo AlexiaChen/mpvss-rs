@@ -9,7 +9,7 @@ use crate::mpvss::MPVSS;
 use crate::polynomial::Polynomial;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
 use crate::util::Util;
-use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt, ToBigUint};
+use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt};
 use num_integer::Integer;
 use num_primes::Generator;
 use num_traits::identities::{One, Zero};

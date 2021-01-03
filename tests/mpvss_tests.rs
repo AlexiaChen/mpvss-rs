@@ -3,8 +3,7 @@
 // Code is licensed under AGPL License, Version 3.0.
 
 use mpvss_rs::Participant;
-use mpvss_rs::MPVSS;
-use num_bigint::{BigInt, BigUint, ToBigInt};
+use num_bigint::{BigUint, ToBigInt};
 
 #[test]
 fn test_secret_str_utf8() {
@@ -25,9 +24,6 @@ fn test_mpvss_distribute_verify() {
     let mut p1 = Participant::new();
     let mut p2 = Participant::new();
     let mut p3 = Participant::new();
-    p1.mpvss = dealer.mpvss.clone();
-    p2.mpvss = dealer.mpvss.clone();
-    p3.mpvss = dealer.mpvss.clone();
     p1.initialize();
     p2.initialize();
     p3.initialize();

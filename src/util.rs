@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use num_bigint::{BigInt, BigUint, Sign, ToBigUint};
+use num_bigint::{BigInt, Sign};
 use num_traits::identities::{One, Zero};
 use std::clone::Clone;
 
@@ -75,11 +75,13 @@ impl Util {
 
 #[cfg(test)]
 mod tests {
+    use super::Util;
+    use num_bigint::{BigInt, BigUint};
+    use num_traits::Num;
+    use num_traits::{One, Zero};
+    use sha2::{Digest, Sha256};
     #[test]
     fn test_extend_gcd() {
-        use super::BigInt;
-        use super::One;
-        use super::Util;
         let a = BigInt::from(26);
         let b = BigInt::from(3);
         let (g, x, y) = Util::extend_gcd(a.clone(), b.clone());
@@ -92,9 +94,6 @@ mod tests {
 
     #[test]
     fn test_mod_inverse() {
-        use super::BigInt;
-        use super::Util;
-
         // 3*inverse = 1 mod 26
         let does_exist = Util::mod_inverse(&BigInt::from(3), &BigInt::from(26));
         // 4*inverse = 1 mod 32
@@ -116,10 +115,6 @@ mod tests {
 
     #[test]
     fn test_lagrange_coefficient() {
-        use super::BigInt;
-        use super::Util;
-        use super::{One, Zero};
-
         let i_array = [9, 1, 2, 3];
         let values = [0, 1, 2, 3, 4, 5, 6];
         let result = Util::lagrange_coefficient(&i_array[0], &values);
@@ -143,8 +138,6 @@ mod tests {
 
     #[test]
     fn test_abs() {
-        use super::BigInt;
-        use super::Util;
         let minus = BigInt::from(-100);
         assert_eq!(Util::abs(&minus), BigInt::from(100));
 
@@ -160,7 +153,6 @@ mod tests {
 
     #[test]
     fn test_xor() {
-        use super::BigUint;
         let a = BigUint::from(1337_u32);
         let b = BigUint::from(42_u32);
         let xor = a ^ b;
@@ -169,10 +161,6 @@ mod tests {
 
     #[test]
     fn test_hash() {
-        use super::{BigInt, BigUint, ToBigUint};
-        use num_traits::Num;
-        use sha2::{Digest, Sha256};
-
         let mut sha256 = Sha256::new();
         let value_1 = BigInt::from_str_radix("43589072349864890574839", 10).unwrap();
         let value_2 = BigInt::from_str_radix("14735247304952934566", 10).unwrap();

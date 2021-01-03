@@ -2,7 +2,7 @@
 //
 // Code is licensed under AGPL License, Version 3.0.
 
-use num_bigint::{BigInt, BigUint, ToBigInt, ToBigUint};
+use num_bigint::{BigInt, BigUint, ToBigInt};
 use num_integer::Integer;
 use num_primes::Generator;
 use num_traits::identities::{One, Zero};
@@ -181,11 +181,10 @@ impl DLEQ {
 
 #[cfg(test)]
 mod tests {
+    use super::DLEQ;
+    use num_bigint::BigInt;
     #[test]
     fn test_dleq() {
-        use super::DLEQ;
-        use num_bigint::BigInt;
-
         let g1 = BigInt::from(8443);
         let h1 = BigInt::from(531216);
         let g2 = BigInt::from(1299721);
@@ -194,6 +193,8 @@ mod tests {
         let q = BigInt::from(15487469);
         let alpha = BigInt::from(163027);
         let length = 64_i64;
+
+        drop(length);
 
         let mut dleq = DLEQ::new();
         dleq.init2(g1, h1, g2, h2, q.clone(), alpha, w);

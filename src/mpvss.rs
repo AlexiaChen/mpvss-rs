@@ -259,11 +259,13 @@ impl MPVSS {
 
 #[cfg(test)]
 mod tests {
+    use super::MPVSS;
+    use num_bigint::{BigInt, BigUint, ToBigInt};
+    use num_integer::Integer;
+    use num_primes::Verification;
+    use num_traits::One;
     #[test]
     fn test_new() {
-        use super::MPVSS;
-        use num_primes::Verification;
-
         let mpvss = MPVSS::new();
         assert!(Verification::is_safe_prime(&mpvss.q.to_biguint().unwrap()));
         assert!(Verification::is_prime(&mpvss.g.to_biguint().unwrap()));
@@ -272,9 +274,6 @@ mod tests {
 
     #[test]
     fn test_init() {
-        use super::MPVSS;
-        use super::{BigInt, BigUint, One, ToBigInt};
-        use num_primes::Verification;
         let mpvss = MPVSS::init(64);
         assert!(Verification::is_safe_prime(&mpvss.q.to_biguint().unwrap()));
         assert!(Verification::is_prime(&mpvss.g.to_biguint().unwrap()));
@@ -293,11 +292,6 @@ mod tests {
 
     #[test]
     fn test_gen_priv_key() {
-        use super::MPVSS;
-        use super::*;
-        use num_bigint::BigInt;
-        use num_integer::Integer;
-        use num_primes::Verification;
         let mut mpvss = MPVSS::new();
         mpvss.q = BigInt::from(49999_i32);
         assert!(Verification::is_prime(&mpvss.q.to_biguint().unwrap()));
@@ -317,6 +311,7 @@ mod tests {
         let G: BigInt = BigInt::from(15486487);
 
         let length = 64_i64;
+        drop(length);
 
         let mut mpvss = MPVSS::new();
         mpvss.q = q;
