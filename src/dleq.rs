@@ -37,7 +37,7 @@ impl Verifier {
     fn check(c: &BigInt, q: &BigInt, challenge_hasher: &Sha256) -> bool {
         // Calculate challenge
         let challenge_hash = challenge_hasher.clone().finalize();
-        let challenge_big_uint = BigUint::from_bytes_le(&challenge_hash[..])
+        let challenge_big_uint = BigUint::from_bytes_be(&challenge_hash[..])
             .mod_floor(&(q.clone().to_biguint().unwrap() - BigUint::one()));
         challenge_big_uint == (*c).to_biguint().unwrap()
     }

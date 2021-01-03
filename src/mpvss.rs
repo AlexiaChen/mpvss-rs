@@ -151,10 +151,10 @@ impl MPVSS {
         // and checks that the hash of X_i,Y_i, a_1i, a_2i,  1 ≤ i ≤ n, matches c.
         let mut dleq = DLEQ::new();
         let mut challenge_hasher = Sha256::new();
-        for publickey in distribute_sharesbox.publickeys.iter() {
-            let position = distribute_sharesbox.positions.get(publickey);
-            let response = distribute_sharesbox.responses.get(publickey);
-            let encrypted_share = distribute_sharesbox.shares.get(publickey);
+        for publickey in distribute_sharesbox.publickeys.clone() {
+            let position = distribute_sharesbox.positions.get(&publickey);
+            let response = distribute_sharesbox.responses.get(&publickey);
+            let encrypted_share = distribute_sharesbox.shares.get(&publickey);
             if position.is_none() || response.is_none() || encrypted_share.is_none() {
                 return false;
             }
@@ -251,7 +251,7 @@ impl MPVSS {
         // Reconstruct the secret = H(G^s) xor U
         let secret_hash = sha2::Sha256::digest(&secret.to_biguint().unwrap().to_bytes_le());
         let hash_big_uint =
-            BigUint::from_bytes_le(&secret_hash[..]).mod_floor(&self.q.to_biguint().unwrap());
+            BigUint::from_bytes_be(&secret_hash[..]).mod_floor(&self.q.to_biguint().unwrap());
         let decrypted_secret = hash_big_uint ^ distribute_share_box.U.clone().to_biguint().unwrap();
         Some(decrypted_secret.to_bigint().unwrap())
     }

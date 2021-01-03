@@ -463,4 +463,11 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_distribution_verify() {
+        let setup = Setup::new();
+        let distribution = get_distribute_shares_box();
+        assert_eq!(setup.mpvss.verify_distribution_shares(&distribution), true);
+    }
 }

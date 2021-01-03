@@ -9,10 +9,10 @@ use num_bigint::{BigInt, BigUint, ToBigInt};
 #[test]
 fn test_secret_str_utf8() {
     let secret_message = String::from("Hello MPVSS.");
-    let secret = BigUint::from_bytes_le(&secret_message.as_bytes());
+    let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
     assert_eq!(
         secret_message,
-        String::from_utf8(secret.to_bytes_le()).unwrap()
+        String::from_utf8(secret.to_bytes_be()).unwrap()
     );
 }
 
