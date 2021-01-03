@@ -31,7 +31,23 @@ cargo test
 At first we convert our secret message into a numeric value if necessary. When creating the dealer a PVSS instance is created as well which holds all the global parameters that every participant needs to know.
 
 ```rust
+let secret_message = String::from("Hello MPVSS.");
+let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
 
+let mut dealer = Participant::new();
+dealer.initialize();
+
+let mut p1 = Participant::new();
+let mut p2 = Participant::new();
+let mut p3 = Participant::new();
+
+p1.mpvss = dealer.mpvss.clone();
+p2.mpvss = dealer.mpvss.clone();
+p3.mpvss = dealer.mpvss.clone();
+
+p1.initialize();
+p2.initialize();
+p3.initialize();
 ```
 
 #### Distribution & Verification
@@ -39,15 +55,25 @@ At first we convert our secret message into a numeric value if necessary. When c
 The dealer splits the secret into shares, encrypts them and creates a proof so that everybody can verify that the shares (once decrypted) can be used to reconstruct the secret. The threshold determines how many shares are necessary for the reconstruction. The encrypted shares and the proof are then bundled together.
 
 ```rust
-/
+// Dealer that shares the secret among p1, p2 and p3.
+let distribute_shares_box = dealer.distribute_secret(
+        secret.to_bigint().unwrap(),
+        vec![p1.publickey, p2.publickey, p3.publickey],
+        3,
+    );
+
+// p1 verifies distribution shares box containing encryted shares and proof of zero-knowlege. [p2 and p3 do this as well.]
+assert_eq!(
+    p1.mpvss.verify_distribution_shares(&distribute_shares_box),
+    true
+);
 ```
 
 #### Exchange & Verification
 
-The participants extract their shares from the distribution bundle and decrypt them. They bundle them together with a proof that allows the receiver to verify that the share is indeed the result of the decryption.
+The participants extract their shares from the distribution shares box and decrypt them. They bundle them together with a proof that allows the receiver to verify that the share is indeed the result of the decryption.
 
 ```rust
-
 ```
 
 #### Reconstruction

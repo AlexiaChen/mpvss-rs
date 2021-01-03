@@ -19,7 +19,7 @@ fn test_secret_str_utf8() {
 #[test]
 fn test_mpvss_distribute_verify() {
     let secret_message = String::from("Hello MPVSS.");
-    let secret = BigUint::from_bytes_le(&secret_message.as_bytes());
+    let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
     let mut dealer = Participant::new();
     dealer.initialize();
     let mut p1 = Participant::new();
