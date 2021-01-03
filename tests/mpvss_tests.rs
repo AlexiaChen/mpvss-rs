@@ -42,4 +42,14 @@ fn test_mpvss_distribute_verify() {
         p1.mpvss.verify_distribution_shares(&distribute_shares_box),
         true
     );
+
+    assert_eq!(
+        p2.mpvss.verify_distribution_shares(&distribute_shares_box),
+        true
+    );
+
+    assert_eq!(
+        p3.mpvss.verify_distribution_shares(&distribute_shares_box),
+        true
+    );
 }
