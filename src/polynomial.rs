@@ -4,6 +4,7 @@
 
 use num_bigint::{BigInt, RandBigInt, ToBigInt};
 use num_traits::pow::Pow;
+use num_traits::One;
 use std::clone::Clone;
 use std::ops::*;
 use std::vec::Vec;
@@ -60,11 +61,11 @@ impl Polynomial {
 
 #[cfg(test)]
 mod tests {
+    use super::BigInt;
+    use super::Polynomial;
+    use num_bigint::ToBigInt;
     #[test]
     fn test_init_polynomial() {
-        use super::BigInt;
-        use super::Polynomial;
-
         let mut polynomial = Polynomial::new();
         let degree = 3;
         polynomial.init(degree, BigInt::from(5_i32));
@@ -73,10 +74,6 @@ mod tests {
     }
     #[test]
     fn test_get_value() {
-        use super::BigInt;
-        use super::Polynomial;
-        use num_bigint::ToBigInt;
-
         // a_0 = 3, a_1 = 2, a_2 = 2, a_3 = 4
         let mut polynomial = Polynomial::new();
         polynomial.init_coefficients(vec![

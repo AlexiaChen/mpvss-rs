@@ -56,10 +56,10 @@ impl Verifier {
         let a1 = (g1.modpow(response, q) * h1.modpow(c, q)) % q;
         let a2 = (g2.modpow(response, q) * h2.modpow(c, q)) % q;
         // Update hash
-        challenge_hasher.update(h1.to_biguint().unwrap().to_bytes_le());
-        challenge_hasher.update(h2.to_biguint().unwrap().to_bytes_le());
-        challenge_hasher.update(a1.to_biguint().unwrap().to_bytes_le());
-        challenge_hasher.update(a2.to_biguint().unwrap().to_bytes_le());
+        challenge_hasher.update(h1.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        challenge_hasher.update(h2.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        challenge_hasher.update(a1.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        challenge_hasher.update(a2.to_biguint().unwrap().to_str_radix(10).as_bytes());
     }
 }
 

@@ -107,7 +107,7 @@ impl Participant {
             let mut x: BigInt = BigInt::one();
             let mut exponent: BigInt = BigInt::one();
             for j in 0..=threshold - 1 {
-                x = x * commitments[j as usize].modpow(&exponent, &self.mpvss.q);
+                x = (x * commitments[j as usize].modpow(&exponent, &self.mpvss.q)) % &self.mpvss.q;
                 exponent =
                     (exponent * BigInt::from(position)) % (self.mpvss.q.clone() - BigInt::one());
             }
@@ -138,16 +138,34 @@ impl Participant {
 
             // Update challenge hash
             // the challenge c for the protocol is computed as a cryptographic hash of X_i,Y_i,a_1i,a_2i, 1 <= i <= n
-            challenge_hasher.update(x.to_biguint().unwrap().to_bytes_le());
-            challenge_hasher.update(encrypted_secret_share.to_biguint().unwrap().to_bytes_le());
-            challenge_hasher.update(dleq.get_a1().to_biguint().unwrap().to_bytes_le());
-            challenge_hasher.update(dleq.get_a2().to_biguint().unwrap().to_bytes_le());
+            challenge_hasher.update(x.to_biguint().unwrap().to_str_radix(10).as_bytes());
+            challenge_hasher.update(
+                encrypted_secret_share
+                    .to_biguint()
+                    .unwrap()
+                    .to_str_radix(10)
+                    .as_bytes(),
+            );
+            challenge_hasher.update(
+                dleq.get_a1()
+                    .to_biguint()
+                    .unwrap()
+                    .to_str_radix(10)
+                    .as_bytes(),
+            );
+            challenge_hasher.update(
+                dleq.get_a2()
+                    .to_biguint()
+                    .unwrap()
+                    .to_str_radix(10)
+                    .as_bytes(),
+            );
             position += 1;
         } // end for participant's publickeys
 
         // the common challenge c
         let challenge_hash = challenge_hasher.finalize();
-        let challenge_big_uint = BigUint::from_bytes_le(&challenge_hash[..])
+        let challenge_big_uint = BigUint::from_bytes_be(&challenge_hash[..])
             .mod_floor(&(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()));
 
         // Calc response r_i
@@ -180,9 +198,15 @@ impl Participant {
                 .mod_floor(&(self.mpvss.q.clone().to_bigint().unwrap() - BigInt::one())),
             &self.mpvss.q,
         );
-        let sha256_hash = sha2::Sha256::digest(&shared_value.to_biguint().unwrap().to_bytes_le());
+        let sha256_hash = sha2::Sha256::digest(
+            &shared_value
+                .to_biguint()
+                .unwrap()
+                .to_str_radix(10)
+                .as_bytes(),
+        );
         let hash_big_uint =
-            BigUint::from_bytes_le(&sha256_hash[..]).mod_floor(&self.mpvss.q.to_biguint().unwrap());
+            BigUint::from_bytes_be(&sha256_hash[..]).mod_floor(&self.mpvss.q.to_biguint().unwrap());
         let U = secret.to_biguint().unwrap() ^ hash_big_uint;
 
         // The proof consists of the common challenge c and the n responses r_i.
@@ -274,14 +298,32 @@ impl Participant {
         );
 
         let mut challenge_hasher = Sha256::new();
-        challenge_hasher.update(public_key.to_biguint().unwrap().to_bytes_le());
-        challenge_hasher.update(encrypted_secret_share.to_biguint().unwrap().to_bytes_le());
-        challenge_hasher.update(dleq.get_a1().to_biguint().unwrap().to_bytes_le());
-        challenge_hasher.update(dleq.get_a2().to_biguint().unwrap().to_bytes_le());
+        challenge_hasher.update(public_key.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        challenge_hasher.update(
+            encrypted_secret_share
+                .to_biguint()
+                .unwrap()
+                .to_str_radix(10)
+                .as_bytes(),
+        );
+        challenge_hasher.update(
+            dleq.get_a1()
+                .to_biguint()
+                .unwrap()
+                .to_str_radix(10)
+                .as_bytes(),
+        );
+        challenge_hasher.update(
+            dleq.get_a2()
+                .to_biguint()
+                .unwrap()
+                .to_str_radix(10)
+                .as_bytes(),
+        );
 
         // the challenge c
         let challenge_hash = challenge_hasher.finalize();
-        let challenge_big_uint = BigUint::from_bytes_le(&challenge_hash[..])
+        let challenge_big_uint = BigUint::from_bytes_be(&challenge_hash[..])
             .mod_floor(&(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()));
         dleq.c = Some(challenge_big_uint.clone().to_bigint().unwrap());
 
@@ -312,5 +354,113 @@ impl Participant {
         let w = Generator::new_uint(self.mpvss.length as usize)
             .mod_floor(&self.mpvss.q.to_biguint().unwrap());
         self.extract_share(shares_box, private_key, w.to_bigint().unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::BigInt;
+    use super::DistributionSharesBox;
+    use super::HashMap;
+    use super::Participant;
+    use super::Polynomial;
+    use super::MPVSS;
+
+    struct Setup {
+        pub mpvss: MPVSS,
+        pub privatekey: BigInt,
+        pub secret: BigInt,
+    }
+
+    impl Setup {
+        fn new() -> Self {
+            let q = BigInt::from(179426549);
+            let g = BigInt::from(1301081);
+            let G = BigInt::from(15486487);
+
+            let length: i64 = 64_i64;
+            let mut mpvss = MPVSS::new();
+            mpvss.length = length as u32;
+            mpvss.g = g;
+            mpvss.G = G;
+            mpvss.q = q;
+
+            return Setup {
+                mpvss: mpvss,
+                privatekey: BigInt::from(105929),
+                secret: BigInt::from(1234567890),
+            };
+        }
+    }
+
+    fn get_distribute_shares_box() -> DistributionSharesBox {
+        let setup = Setup::new();
+        let mut dealer = Participant::new();
+        dealer.mpvss = setup.mpvss.clone();
+        dealer.privatekey = setup.privatekey.clone();
+        dealer.publickey = setup.mpvss.generate_public_key(&setup.privatekey);
+
+        let mut polynomial = Polynomial::new();
+        polynomial.init_coefficients(vec![
+            BigInt::from(164102006),
+            BigInt::from(43489589),
+            BigInt::from(98100795),
+        ]);
+        let threshold: i32 = 3;
+        let privatekeys = [BigInt::from(7901), BigInt::from(4801), BigInt::from(1453)];
+        let mut publickeys = vec![];
+        let w = BigInt::from(6345);
+
+        for key in privatekeys.iter() {
+            publickeys.push(setup.mpvss.generate_public_key(key));
+        }
+
+        return dealer.distribute(
+            setup.secret.clone(),
+            publickeys,
+            threshold as u32,
+            polynomial,
+            w,
+        );
+    }
+
+    #[test]
+    fn test_distribution() {
+        let distribution = get_distribute_shares_box();
+
+        let commitments = vec![
+            BigInt::from(92318234),
+            BigInt::from(76602245),
+            BigInt::from(63484157),
+        ];
+        let mut shares: HashMap<BigInt, BigInt> = HashMap::new();
+        shares.insert(distribution.publickeys[0].clone(), BigInt::from(42478042));
+        shares.insert(distribution.publickeys[1].clone(), BigInt::from(80117658));
+        shares.insert(distribution.publickeys[2].clone(), BigInt::from(86941725));
+
+        let challenge = BigInt::from(41963410);
+        let mut responses: HashMap<BigInt, BigInt> = HashMap::new();
+        responses.insert(distribution.publickeys[0].clone(), BigInt::from(151565889));
+        responses.insert(distribution.publickeys[1].clone(), BigInt::from(146145105));
+        responses.insert(distribution.publickeys[2].clone(), BigInt::from(71350321));
+
+        assert_eq!(distribution.publickeys[0], distribution.publickeys[0]);
+        assert_eq!(distribution.publickeys[1], distribution.publickeys[1]);
+        assert_eq!(distribution.publickeys[2], distribution.publickeys[2]);
+
+        assert_eq!(distribution.challenge, challenge);
+
+        for i in 0..=2 {
+            assert_eq!(distribution.commitments[i], commitments[i]);
+            assert_eq!(
+                distribution.shares[&distribution.publickeys[i]],
+                shares[&distribution.publickeys[i]]
+            );
+            assert_eq!(
+                distribution.responses[&distribution.publickeys[i]],
+                responses[&distribution.publickeys[i]]
+            );
+        }
     }
 }
