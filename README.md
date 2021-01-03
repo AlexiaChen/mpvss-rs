@@ -67,6 +67,14 @@ assert_eq!(
     p1.mpvss.verify_distribution_shares(&distribute_shares_box),
     true
 );
+assert_eq!(
+    p2.mpvss.verify_distribution_shares(&distribute_shares_box),
+    true
+);
+assert_eq!(
+    p3.mpvss.verify_distribution_shares(&distribute_shares_box),
+    true
+);
 ```
 
 #### Exchange & Verification
