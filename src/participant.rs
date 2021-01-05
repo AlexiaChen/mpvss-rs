@@ -194,8 +194,8 @@ impl Participant {
         // Calc U = secret xor SHA256(G^s) = secret xor SHA256(G^p(0)).
         // [Section 4]
         // σ ∈ Σ, where 2 ≤ |Σ| ≤ q.
-        // the general procedure is to let the dealer first run the distribution protocol for a random values ∈ Zq, and then publish U = σ ⊕ H(Gs),
-        // where H is an appropriate cryptographic hash function. The reconstruction protocol will yield G^s, from which we obtain σ = U ⊕ H(Gs).
+        // the general procedure is to let the dealer first run the distribution protocol for a random value s ∈ Zq, and then publish U = σ ⊕ H(G^s),
+        // where H is an appropriate cryptographic hash function. The reconstruction protocol will yield G^s, from which we obtain σ = U ⊕ H(G^s).
         let shared_value = self.mpvss.G.modpow(
             &polynomial
                 .get_value(BigInt::zero())
