@@ -1,4 +1,4 @@
-# MPVSS - A Simply Publicly Verifiable Secret Sharing Library
+# MPVSS - A Simple Publicly Verifiable Secret Sharing Library
 
 ![Rust](https://github.com/AlexiaChen/mpvss-rs/workflows/Rust/badge.svg?branch=master)
 
