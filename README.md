@@ -78,7 +78,7 @@ assert_eq!(
 The participants extract their shares from the distribution shares box and decrypt them. They bundle them together with a proof that allows the receiver to verify that the share is indeed the result of the decryption.
 
 ```rust
- // p1 extracts the share. [p2 and p3 do this as well.]
+// p1 extracts the share. [p2 and p3 do this as well.]
 let s1 = p1
     .extract_secret_share(&distribute_shares_box, &p1.privatekey)
     .unwrap();
@@ -93,19 +93,16 @@ let s3 = p3
     .unwrap();
 
 // p1 verifies the share received from p2. [Actually everybody verifies every received share.]
-
 assert_eq!(
     p1.mpvss
         .verify(&s2, &distribute_shares_box.shares[&p2.publickey]),
     true
 );
-
 assert_eq!(
     p2.mpvss
         .verify(&s3, &distribute_shares_box.shares[&p3.publickey]),
     true
 );
-
 assert_eq!(
     p3.mpvss
         .verify(&s1, &distribute_shares_box.shares[&s1.publickey]),
