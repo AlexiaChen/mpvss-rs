@@ -271,10 +271,10 @@ impl Participant {
     ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
     ///     Return `None` if the distribution shares box does not contain a share for the participant.
     pub fn extract_share(
-        &mut self,
-        shares_box: DistributionSharesBox,
-        private_key: BigInt,
-        w: BigInt,
+        &self,
+        shares_box: &DistributionSharesBox,
+        private_key: &BigInt,
+        w: &BigInt,
     ) -> Option<ShareBox> {
         let public_key = self.mpvss.generate_public_key(&private_key);
         let encrypted_secret_share = shares_box.shares.get(&public_key).unwrap();
@@ -283,7 +283,8 @@ impl Participant {
         // Using its private key x_i, each participant finds the decrypted share S_i = G^p(i) from Y_i by computing S_i = Y_i^(1/x_i).
         // Y_i is encrypted share: Y_i = y_i^p(i)
         // find modular multiplicative inverses of private key
-        let privkey_inverse = Util::mod_inverse(&private_key, &self.mpvss.q).unwrap();
+        let privkey_inverse =
+            Util::mod_inverse(&private_key, &(self.mpvss.q.clone() - BigInt::one())).unwrap();
         let decrypted_share = encrypted_secret_share.modpow(&privkey_inverse, &self.mpvss.q);
 
         // To this end it suffices to prove knowledge of an α such that y_i= G^α and Y_i= S_i^α, which is accomplished by the non-interactive version of the protocol DLEQ(G,y_i,S_i,Y_i).
@@ -298,7 +299,7 @@ impl Participant {
             encrypted_secret_share.clone(),
             self.mpvss.q.clone(),
             private_key.clone(),
-            w,
+            w.clone(),
         );
 
         let mut challenge_hasher = Sha256::new();
@@ -351,13 +352,13 @@ impl Participant {
     ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
     ///     Return `None` if the distribution shares box does not contain a share for the participant.
     pub fn extract_secret_share(
-        &mut self,
-        shares_box: DistributionSharesBox,
-        private_key: BigInt,
+        &self,
+        shares_box: &DistributionSharesBox,
+        private_key: &BigInt,
     ) -> Option<ShareBox> {
         let w = Generator::new_uint(self.mpvss.length as usize)
             .mod_floor(&self.mpvss.q.to_biguint().unwrap());
-        self.extract_share(shares_box, private_key, w.to_bigint().unwrap())
+        self.extract_share(shares_box, private_key, &w.to_bigint().unwrap())
     }
 }
 
@@ -365,11 +366,11 @@ impl Participant {
 mod tests {
 
     use super::BigInt;
-    use super::DistributionSharesBox;
     use super::HashMap;
     use super::Participant;
     use super::Polynomial;
     use super::MPVSS;
+    use super::{DistributionSharesBox, ShareBox};
 
     struct Setup {
         pub mpvss: MPVSS,
@@ -398,6 +399,7 @@ mod tests {
         }
     }
 
+    // Use Fixed distribution shares box for tests
     fn get_distribute_shares_box() -> DistributionSharesBox {
         let setup = Setup::new();
         let mut dealer = Participant::new();
@@ -412,6 +414,7 @@ mod tests {
             BigInt::from(98100795),
         ]);
         let threshold: i32 = 3;
+        // from participant 1 to 3
         let privatekeys = [BigInt::from(7901), BigInt::from(4801), BigInt::from(1453)];
         let mut publickeys = vec![];
         let w = BigInt::from(6345);
@@ -427,6 +430,23 @@ mod tests {
             polynomial,
             w,
         );
+    }
+
+    // Use Fixed Share box for tests
+    fn get_share_box() -> ShareBox {
+        let distribution_shares_box = get_distribute_shares_box();
+        // Use Participant 1's private key
+        let private_key = BigInt::from(7901);
+        let w = BigInt::from(1337);
+        let mut participant = Participant::new();
+        let setup = Setup::new();
+        participant.mpvss = setup.mpvss.clone();
+        participant.privatekey = private_key.clone();
+        participant.publickey = setup.mpvss.generate_public_key(&private_key);
+
+        participant
+            .extract_share(&distribution_shares_box, &private_key, &w)
+            .unwrap()
     }
 
     #[test]
@@ -473,5 +493,30 @@ mod tests {
         let setup = Setup::new();
         let distribution = get_distribute_shares_box();
         assert_eq!(setup.mpvss.verify_distribution_shares(&distribution), true);
+    }
+
+    #[test]
+    fn test_extract_share() {
+        let share_box = get_share_box();
+        assert_eq!(share_box.share, BigInt::from(164021044));
+        assert_eq!(share_box.challenge, BigInt::from(134883166));
+        assert_eq!(share_box.response, BigInt::from(81801891));
+    }
+
+    #[test]
+    fn test_share_box_verify() {
+        // participant 1 private key
+        let private_key = BigInt::from(7901);
+        let distribution_shares_box = get_distribute_shares_box();
+        let share_box = get_share_box();
+
+        let setup = Setup::new();
+        assert_eq!(
+            setup.mpvss.verify(
+                &share_box,
+                &distribution_shares_box.shares[&setup.mpvss.generate_public_key(&private_key)]
+            ),
+            true
+        );
     }
 }

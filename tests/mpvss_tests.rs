@@ -30,7 +30,11 @@ fn test_mpvss_distribute_verify() {
 
     let distribute_shares_box = dealer.distribute_secret(
         secret.to_bigint().unwrap(),
-        vec![p1.publickey, p2.publickey, p3.publickey],
+        vec![
+            p1.publickey.clone(),
+            p2.publickey.clone(),
+            p3.publickey.clone(),
+        ],
         3,
     );
 
@@ -46,6 +50,40 @@ fn test_mpvss_distribute_verify() {
 
     assert_eq!(
         p3.mpvss.verify_distribution_shares(&distribute_shares_box),
+        true
+    );
+
+    // p1 extracts the share. [p2 and p3 do this as well.]
+    let s1 = p1
+        .extract_secret_share(&distribute_shares_box, &p1.privatekey)
+        .unwrap();
+
+    // p1, p2 and p3 exchange their descrypted shares.
+    // ...
+    let s2 = p2
+        .extract_secret_share(&distribute_shares_box, &p2.privatekey)
+        .unwrap();
+    let s3 = p3
+        .extract_secret_share(&distribute_shares_box, &p3.privatekey)
+        .unwrap();
+
+    // p1 verifies the share received from p2. [Actually everybody verifies every received share.]
+
+    assert_eq!(
+        p1.mpvss
+            .verify(&s2, &distribute_shares_box.shares[&p2.publickey]),
+        true
+    );
+
+    assert_eq!(
+        p2.mpvss
+            .verify(&s3, &distribute_shares_box.shares[&p3.publickey]),
+        true
+    );
+
+    assert_eq!(
+        p3.mpvss
+            .verify(&s1, &distribute_shares_box.shares[&s1.publickey]),
         true
     );
 }
