@@ -1,4 +1,4 @@
-// Copyright 2020-2021 The MPVSS Authors.
+// Copyright 2020-2021 The MPVSS Author: MathxH Chen.
 //
 // Code is licensed under AGPL License, Version 3.0.
 
