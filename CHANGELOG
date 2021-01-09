@@ -1,0 +1,7 @@
+# Version 0.0.1
+
+## Features
+
+- Support secret shares reconstruction.
+- Support threshhold (t, n) scheme.
+- Secret Reconstruction in single-thread. (multi-thread reconstruction will be coming soon)
