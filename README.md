@@ -15,13 +15,19 @@ Thus PVSS can be used to share a secret among a group of participants so that ei
 ## Build
 
 ```bash
-cargo build
+cargo build --release
 ```
 
 ## Test
 
 ```bash
-cargo test
+cargo test --release
+```
+
+## Example
+
+```rust
+cargo run --release --example mpvss
 ```
 
 ### Usage
@@ -115,7 +121,26 @@ assert_eq!(
 Once a participant collected at least `threshold` shares the secret can be reconstructed.
 
 ```rust
+let share_boxs = [s1, s2, s3];
+let r1 = p1
+    .mpvss
+    .reconstruct(&share_boxs, &distribute_shares_box)
+    .unwrap();
+let r2 = p2
+    .mpvss
+    .reconstruct(&share_boxs, &distribute_shares_box)
+    .unwrap();
+let r3 = p3
+    .mpvss
+    .reconstruct(&share_boxs, &distribute_shares_box)
+    .unwrap();
 
+let r1_str = String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
+assert_eq!(secret_message.clone(), r1_str);
+let r2_str = String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
+assert_eq!(secret_message.clone(), r2_str);
+let r3_str = String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
+assert_eq!(secret_message.clone(), r3_str);
 ```
 
 ## Related References:

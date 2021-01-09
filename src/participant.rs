@@ -371,6 +371,7 @@ mod tests {
     use super::Polynomial;
     use super::MPVSS;
     use super::{DistributionSharesBox, ShareBox};
+    use num_traits::{One, Zero};
 
     struct Setup {
         pub mpvss: MPVSS,
@@ -518,5 +519,83 @@ mod tests {
             ),
             true
         );
+    }
+
+    #[test]
+    fn test_reconstruction_with_all_participants() {
+        let distribution_shares_box = get_distribute_shares_box();
+        let share_box1 = get_share_box();
+        let mut share_box2 = ShareBox::new();
+        share_box2.init(
+            BigInt::from(132222922),
+            BigInt::from(157312059),
+            BigInt::zero(),
+            BigInt::zero(),
+        );
+        let mut share_box3 = ShareBox::new();
+        share_box3.init(
+            BigInt::from(65136827),
+            BigInt::from(63399333),
+            BigInt::zero(),
+            BigInt::zero(),
+        );
+
+        let setup = Setup::new();
+        let share_boxs = [share_box1, share_box2, share_box3];
+        let reconstructed_secret = setup
+            .mpvss
+            .reconstruct(&share_boxs, &distribution_shares_box)
+            .unwrap();
+        assert_eq!(reconstructed_secret, setup.secret);
+    }
+
+    // (3,4) threshhold reconstruct, participant 3 is not available, 1,2,4 is available
+    #[test]
+    fn test_reconstruction_with_sub_group() {
+        let share_box1 = get_share_box();
+        let mut share_box2 = ShareBox::new();
+        share_box2.init(
+            BigInt::from(132222922),
+            BigInt::from(157312059),
+            BigInt::zero(),
+            BigInt::zero(),
+        );
+
+        let public_key4 = BigInt::from(42);
+        let mut share_box4 = ShareBox::new();
+        share_box4.init(
+            public_key4.clone(),
+            BigInt::from(59066181),
+            BigInt::zero(),
+            BigInt::zero(),
+        );
+
+        let mut positions = HashMap::new();
+        positions.insert(share_box1.clone().publickey, 1_i64);
+        positions.insert(share_box2.clone().publickey, 2_i64);
+        positions.insert(share_box4.clone().publickey, 4_i64);
+        // remove participant 3 public key
+        positions.remove(&BigInt::from(65136827));
+        *positions.get_mut(&public_key4).unwrap() = 4_i64;
+
+        let mut distribution_shares_box = DistributionSharesBox::new();
+        distribution_shares_box.init(
+            vec![BigInt::zero(), BigInt::one(), BigInt::from(2)],
+            positions,
+            HashMap::new(),
+            vec![],
+            BigInt::zero(),
+            HashMap::new(),
+            BigInt::from(1284073502),
+        );
+
+        let setup = Setup::new();
+        let share_boxs = [share_box1, share_box2, share_box4];
+        let reconstructed_secret = setup
+            .mpvss
+            .reconstruct(&share_boxs, &distribution_shares_box)
+            .unwrap();
+        assert_eq!(reconstructed_secret, setup.secret);
+
     }
 }

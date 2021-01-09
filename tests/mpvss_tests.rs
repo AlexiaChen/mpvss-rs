@@ -16,7 +16,7 @@ fn test_secret_str_utf8() {
 }
 
 #[test]
-fn test_mpvss_distribute_verify() {
+fn test_mpvss_distribute_verify_reconstruct() {
     let secret_message = String::from("Hello MPVSS.");
     let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
     let mut dealer = Participant::new();
@@ -86,4 +86,25 @@ fn test_mpvss_distribute_verify() {
             .verify(&s1, &distribute_shares_box.shares[&s1.publickey]),
         true
     );
+
+    let share_boxs = [s1, s2, s3];
+    let r1 = p1
+        .mpvss
+        .reconstruct(&share_boxs, &distribute_shares_box)
+        .unwrap();
+    let r2 = p2
+        .mpvss
+        .reconstruct(&share_boxs, &distribute_shares_box)
+        .unwrap();
+    let r3 = p3
+        .mpvss
+        .reconstruct(&share_boxs, &distribute_shares_box)
+        .unwrap();
+
+    let r1_str = String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
+    assert_eq!(secret_message.clone(), r1_str);
+    let r2_str = String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
+    assert_eq!(secret_message.clone(), r2_str);
+    let r3_str = String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
+    assert_eq!(secret_message.clone(), r3_str);
 }

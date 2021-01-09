@@ -249,7 +249,8 @@ impl MPVSS {
         }
 
         // Reconstruct the secret = H(G^s) xor U
-        let secret_hash = sha2::Sha256::digest(&secret.to_biguint().unwrap().to_bytes_le());
+        let secret_hash =
+            sha2::Sha256::digest(&secret.to_biguint().unwrap().to_str_radix(10).as_bytes());
         let hash_big_uint =
             BigUint::from_bytes_be(&secret_hash[..]).mod_floor(&self.q.to_biguint().unwrap());
         let decrypted_secret = hash_big_uint ^ distribute_share_box.U.clone().to_biguint().unwrap();
