@@ -574,9 +574,6 @@ mod tests {
         positions.insert(share_box1.clone().publickey, 1_i64);
         positions.insert(share_box2.clone().publickey, 2_i64);
         positions.insert(share_box4.clone().publickey, 4_i64);
-        // remove participant 3 public key
-        positions.remove(&BigInt::from(65136827));
-        *positions.get_mut(&public_key4).unwrap() = 4_i64;
 
         let mut distribution_shares_box = DistributionSharesBox::new();
         distribution_shares_box.init(
@@ -596,6 +593,5 @@ mod tests {
             .reconstruct(&share_boxs, &distribution_shares_box)
             .unwrap();
         assert_eq!(reconstructed_secret, setup.secret);
-
     }
 }
