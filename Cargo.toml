@@ -1,8 +1,13 @@
 [package]
 authors = ["MathxH Chen <brainfvck@foxmail.com>"]
+description = "A Simple Publicly Verifiable Secret Sharing Library"
 edition = "2018"
+keywords = ["pvss scheme", "secret sharing", "threshold cryptography", "zero knowledge proofs", "publicly verifiable secret sharing"]
+license-file = "LICENSE"
 name = "mpvss-rs"
-version = "0.0.2"
+readme = "README.md"
+repository = "https://github.com/AlexiaChen/mpvss-rs"
+version = "0.0.3"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
