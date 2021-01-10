@@ -2,7 +2,7 @@
 authors = ["MathxH Chen <brainfvck@foxmail.com>"]
 description = "A Simple Publicly Verifiable Secret Sharing Library"
 edition = "2018"
-keywords = ["secret sharing", "threshold cryptography", "zero knowledge proofs", "publicly verifiable secret sharing"]
+keywords = ["pvss-scheme", "secret-sharing", "threshold-crypto", "zero-knowledge-proof"]
 license-file = "LICENSE"
 name = "mpvss-rs"
 readme = "README.md"
