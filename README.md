@@ -27,7 +27,7 @@ cargo test --release
 ## Example
 
 ```rust
-cargo run --release --example mpvss
+cargo run --release --example mpvss_all
 ```
 
 ### Usage
