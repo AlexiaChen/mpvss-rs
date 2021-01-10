@@ -7,7 +7,6 @@ version = "0.0.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gmp-mpfr-sys = "1.4"
 num-bigint = {version = "0.2.6", features = ["rand"]}
 num-integer = "0.1.44"
 num-primes = "0.1.1"
