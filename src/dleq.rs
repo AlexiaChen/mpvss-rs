@@ -31,6 +31,7 @@ impl Prover {
 
 struct Verifier {}
 impl Verifier {
+    #[allow(dead_code)]
     fn send() -> BigInt {
         BigInt::zero()
     }
@@ -107,6 +108,7 @@ impl DLEQ {
             r: None,
         };
     }
+    #[allow(dead_code)]
     pub fn init(
         &mut self,
         g1: BigInt,
@@ -155,6 +157,7 @@ impl DLEQ {
         Prover::response(&self.w, &self.alpha, &self.c, &self.q)
     }
 
+    #[allow(dead_code)]
     /// send a random challenge c
     pub fn get_c(&self) -> BigInt {
         Verifier::send()
