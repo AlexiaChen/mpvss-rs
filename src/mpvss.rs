@@ -13,7 +13,7 @@ use num_primes::Generator;
 use num_traits::identities::{One, Zero};
 use sha2::{Digest, Sha256};
 use std::clone::Clone;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// 2048-bit MODP Group
 /// New Modular Exponential (MODP) Diffie-Hellman groups
@@ -193,7 +193,7 @@ impl MPVSS {
         if share_boxs.len() < distribute_share_box.commitments.len() {
             return None;
         }
-        let mut shares: HashMap<i64, BigInt> = HashMap::new();
+        let mut shares: BTreeMap<i64, BigInt> = BTreeMap::new();
         for share_box in share_boxs.iter() {
             let position = distribute_share_box.positions.get(&share_box.publickey);
             if position.is_none() {

@@ -6,7 +6,7 @@
 
 use num_bigint::BigInt;
 use num_traits::identities::Zero;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::vec::Vec;
 
 #[derive(Debug, Clone)]
@@ -39,11 +39,11 @@ impl ShareBox {
 /// The dealer picks a randompolynomialp of degree at most t−1 with coefficients in Z_q
 pub struct DistributionSharesBox {
     pub commitments: Vec<BigInt>,
-    pub positions: HashMap<BigInt, i64>,
-    pub shares: HashMap<BigInt, BigInt>,
+    pub positions: BTreeMap<BigInt, i64>,
+    pub shares: BTreeMap<BigInt, BigInt>,
     pub publickeys: Vec<BigInt>,
     pub challenge: BigInt,
-    pub responses: HashMap<BigInt, BigInt>,
+    pub responses: BTreeMap<BigInt, BigInt>,
     pub U: BigInt,
 }
 
@@ -51,11 +51,11 @@ impl DistributionSharesBox {
     pub fn new() -> Self {
         return DistributionSharesBox {
             commitments: Vec::new(),
-            positions: HashMap::new(),
-            shares: HashMap::new(),
+            positions: BTreeMap::new(),
+            shares: BTreeMap::new(),
             publickeys: Vec::new(),
             challenge: BigInt::zero(),
-            responses: HashMap::new(),
+            responses: BTreeMap::new(),
             U: BigInt::zero(),
         };
     }
@@ -63,11 +63,11 @@ impl DistributionSharesBox {
     pub fn init(
         &mut self,
         commitments: Vec<BigInt>,
-        positions: HashMap<BigInt, i64>,
-        shares: HashMap<BigInt, BigInt>,
+        positions: BTreeMap<BigInt, i64>,
+        shares: BTreeMap<BigInt, BigInt>,
         publickeys: Vec<BigInt>,
         challenge: BigInt,
-        responses: HashMap<BigInt, BigInt>,
+        responses: BTreeMap<BigInt, BigInt>,
         U: BigInt,
     ) {
         self.commitments = commitments;

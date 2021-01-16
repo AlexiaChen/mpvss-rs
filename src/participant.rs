@@ -15,7 +15,7 @@ use num_primes::Generator;
 use num_traits::identities::{One, Zero};
 use sha2::{Digest, Sha256};
 use std::clone::Clone;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::option::Option;
 
 /// A participant represents one party in the secret sharing scheme. The participant can share a secret among a group of other participants and it is then called the "dealer".
@@ -69,15 +69,15 @@ impl Participant {
         assert!(threshold <= publickeys.len() as u32);
         // Data the distribution shares box is going to be consisting of
         let mut commitments: Vec<BigInt> = Vec::new();
-        let mut positions: HashMap<BigInt, i64> = HashMap::new();
-        let mut X: HashMap<BigInt, BigInt> = HashMap::new();
-        let mut shares: HashMap<BigInt, BigInt> = HashMap::new();
+        let mut positions: BTreeMap<BigInt, i64> = BTreeMap::new();
+        let mut X: BTreeMap<BigInt, BigInt> = BTreeMap::new();
+        let mut shares: BTreeMap<BigInt, BigInt> = BTreeMap::new();
         let mut challenge_hasher = Sha256::new();
 
         // Temp variable
-        let mut sampling_points: HashMap<BigInt, BigInt> = HashMap::new();
-        let mut a: HashMap<BigInt, (BigInt, BigInt)> = HashMap::new();
-        let mut dleq_w: HashMap<BigInt, BigInt> = HashMap::new();
+        let mut sampling_points: BTreeMap<BigInt, BigInt> = BTreeMap::new();
+        let mut a: BTreeMap<BigInt, (BigInt, BigInt)> = BTreeMap::new();
+        let mut dleq_w: BTreeMap<BigInt, BigInt> = BTreeMap::new();
         let mut position: i64 = 1;
 
         // Calculate Ploynomial Coefficients Commitments C_j = g^(a_j) under group of prime q, and  0 <= j < threshold
@@ -169,7 +169,7 @@ impl Participant {
             .mod_floor(&(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()));
 
         // Calc response r_i
-        let mut responses: HashMap<BigInt, BigInt> = HashMap::new();
+        let mut responses: BTreeMap<BigInt, BigInt> = BTreeMap::new();
         for pubkey in publickeys.clone() {
             // DLEQ(g1,h2,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,encrypted_secret_share_from_pubkey)
             let x_i = X.get(&pubkey).unwrap();
@@ -365,8 +365,8 @@ impl Participant {
 #[cfg(test)]
 mod tests {
 
+    use super::BTreeMap;
     use super::BigInt;
-    use super::HashMap;
     use super::Participant;
     use super::Polynomial;
     use super::MPVSS;
@@ -459,13 +459,13 @@ mod tests {
             BigInt::from(76602245),
             BigInt::from(63484157),
         ];
-        let mut shares: HashMap<BigInt, BigInt> = HashMap::new();
+        let mut shares: BTreeMap<BigInt, BigInt> = BTreeMap::new();
         shares.insert(distribution.publickeys[0].clone(), BigInt::from(42478042));
         shares.insert(distribution.publickeys[1].clone(), BigInt::from(80117658));
         shares.insert(distribution.publickeys[2].clone(), BigInt::from(86941725));
 
         let challenge = BigInt::from(41963410);
-        let mut responses: HashMap<BigInt, BigInt> = HashMap::new();
+        let mut responses: BTreeMap<BigInt, BigInt> = BTreeMap::new();
         responses.insert(distribution.publickeys[0].clone(), BigInt::from(151565889));
         responses.insert(distribution.publickeys[1].clone(), BigInt::from(146145105));
         responses.insert(distribution.publickeys[2].clone(), BigInt::from(71350321));
@@ -570,7 +570,7 @@ mod tests {
             BigInt::zero(),
         );
 
-        let mut positions = HashMap::new();
+        let mut positions = BTreeMap::new();
         positions.insert(share_box1.clone().publickey, 1_i64);
         positions.insert(share_box2.clone().publickey, 2_i64);
         positions.insert(share_box4.clone().publickey, 4_i64);
@@ -579,10 +579,10 @@ mod tests {
         distribution_shares_box.init(
             vec![BigInt::zero(), BigInt::one(), BigInt::from(2)],
             positions,
-            HashMap::new(),
+            BTreeMap::new(),
             vec![],
             BigInt::zero(),
-            HashMap::new(),
+            BTreeMap::new(),
             BigInt::from(1284073502),
         );
 
