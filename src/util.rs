@@ -1,6 +1,6 @@
-// Copyright 2020-2021 The MPVSS Author: MathxH Chen.
+// Copyright 2020-2021  MathxH Chen.
 //
-// Code is licensed under AGPL License, Version 3.0.
+// Code is licensed under GPLv3.0 License.
 
 use num_bigint::{BigInt, Sign};
 use num_traits::identities::{One, Zero};

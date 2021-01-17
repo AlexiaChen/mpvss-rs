@@ -165,3 +165,7 @@ Because the ploynomial commitments does not Pedersen commitment and DLEQ is only
 - Torben Pryds Pedersen. [Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing](https://link.springer.com/content/pdf/10.1007%2F3-540-46766-1_9.pdf)
 
 - Chunming Tang. Dingyi Pei. [Non-Interactive and Information-Theoretic Secure Publicly Verifiable Secret Sharing](https://eprint.iacr.org/2004/201.pdf)
+
+## License
+
+GPLv3.0 License(https://www.gnu.org/licenses/gpl-3.0.txt)
