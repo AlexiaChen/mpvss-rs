@@ -27,7 +27,13 @@ impl ShareBox {
         };
     }
 
-    pub fn init(&mut self, publickey: BigInt, share: BigInt, challenge: BigInt, response: BigInt) {
+    pub fn init(
+        &mut self,
+        publickey: BigInt,
+        share: BigInt,
+        challenge: BigInt,
+        response: BigInt,
+    ) {
         self.publickey = publickey;
         self.share = share;
         self.challenge = challenge;

@@ -16,12 +16,20 @@ impl Prover {
         g.modpow(w, q)
     }
 
-    fn response(w: &BigInt, alpha: &BigInt, c: &Option<BigInt>, q: &BigInt) -> Option<BigInt> {
+    fn response(
+        w: &BigInt,
+        alpha: &BigInt,
+        c: &Option<BigInt>,
+        q: &BigInt,
+    ) -> Option<BigInt> {
         let response_r = match c {
             None => None,
             Some(c) => {
-                let r: BigInt = w.to_bigint().unwrap() - (alpha * c).to_bigint().unwrap();
-                let result = r.mod_floor(&(q.clone().to_bigint().unwrap() - BigInt::one()));
+                let r: BigInt =
+                    w.to_bigint().unwrap() - (alpha * c).to_bigint().unwrap();
+                let result = r.mod_floor(
+                    &(q.clone().to_bigint().unwrap() - BigInt::one()),
+                );
                 Some(result)
             }
         };
@@ -57,10 +65,14 @@ impl Verifier {
         let a1 = (g1.modpow(response, q) * h1.modpow(c, q)) % q;
         let a2 = (g2.modpow(response, q) * h2.modpow(c, q)) % q;
         // Update hash
-        challenge_hasher.update(h1.to_biguint().unwrap().to_str_radix(10).as_bytes());
-        challenge_hasher.update(h2.to_biguint().unwrap().to_str_radix(10).as_bytes());
-        challenge_hasher.update(a1.to_biguint().unwrap().to_str_radix(10).as_bytes());
-        challenge_hasher.update(a2.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        challenge_hasher
+            .update(h1.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        challenge_hasher
+            .update(h2.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        challenge_hasher
+            .update(a1.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        challenge_hasher
+            .update(a2.to_biguint().unwrap().to_str_radix(10).as_bytes());
     }
 }
 
@@ -119,7 +131,8 @@ impl DLEQ {
         q: BigInt,
         alpha: BigInt,
     ) {
-        let w: BigUint = Generator::new_prime(length as usize).mod_floor(&q.to_biguint().unwrap());
+        let w: BigUint = Generator::new_prime(length as usize)
+            .mod_floor(&q.to_biguint().unwrap());
         self.init2(g1, h1, g2, h2, q, alpha, w.to_bigint().unwrap());
     }
 

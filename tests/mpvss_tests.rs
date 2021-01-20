@@ -101,10 +101,13 @@ fn test_mpvss_distribute_verify_reconstruct() {
         .reconstruct(&share_boxs, &distribute_shares_box)
         .unwrap();
 
-    let r1_str = String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
+    let r1_str =
+        String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
     assert_eq!(secret_message.clone(), r1_str);
-    let r2_str = String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
+    let r2_str =
+        String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
     assert_eq!(secret_message.clone(), r2_str);
-    let r3_str = String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
+    let r3_str =
+        String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
     assert_eq!(secret_message.clone(), r3_str);
 }
