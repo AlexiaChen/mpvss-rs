@@ -1,9 +1,4 @@
-binop_separator = "Back"
 edition = "2018"
-fn_params_layout = "Compressed"
 hard_tabs = false
-inline_attribute_width = 80
 max_width = 80
 tab_spaces = 4
-trailing_semicolon = false
-unstable_features = true
