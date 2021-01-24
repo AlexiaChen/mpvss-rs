@@ -27,20 +27,11 @@ fn main() {
         3,
     );
 
-    assert_eq!(
-        p1.mpvss.verify_distribution_shares(&distribute_shares_box),
-        true
-    );
+    assert_eq!(p1.verify_distribution_shares(&distribute_shares_box), true);
 
-    assert_eq!(
-        p2.mpvss.verify_distribution_shares(&distribute_shares_box),
-        true
-    );
+    assert_eq!(p2.verify_distribution_shares(&distribute_shares_box), true);
 
-    assert_eq!(
-        p3.mpvss.verify_distribution_shares(&distribute_shares_box),
-        true
-    );
+    assert_eq!(p3.verify_distribution_shares(&distribute_shares_box), true);
 
     // p1 extracts the share. [p2 and p3 do this as well.]
     let s1 = p1
@@ -59,36 +50,24 @@ fn main() {
     // p1 verifies the share received from p2. [Actually everybody verifies every received share.]
 
     assert_eq!(
-        p1.mpvss
-            .verify_share(&s2, &distribute_shares_box, &p2.publickey),
+        p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
         true
     );
 
     assert_eq!(
-        p2.mpvss
-            .verify_share(&s3, &distribute_shares_box, &p3.publickey),
+        p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
         true
     );
 
     assert_eq!(
-        p3.mpvss
-            .verify_share(&s1, &distribute_shares_box, &s1.publickey),
+        p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
         true
     );
 
     let share_boxs = [s1, s2, s3];
-    let r1 = p1
-        .mpvss
-        .reconstruct(&share_boxs, &distribute_shares_box)
-        .unwrap();
-    let r2 = p2
-        .mpvss
-        .reconstruct(&share_boxs, &distribute_shares_box)
-        .unwrap();
-    let r3 = p3
-        .mpvss
-        .reconstruct(&share_boxs, &distribute_shares_box)
-        .unwrap();
+    let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+    let r2 = p2.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+    let r3 = p3.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
 
     let r1_str =
         String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();

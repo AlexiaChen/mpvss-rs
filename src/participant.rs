@@ -23,7 +23,7 @@ use std::option::Option;
 /// A participant represents as a Node in the Distributed Public NetWork
 #[derive(Debug, Clone)]
 pub struct Participant {
-    pub mpvss: MPVSS,
+    mpvss: MPVSS,
     pub privatekey: BigInt,
     pub publickey: BigInt,
 }
@@ -430,6 +430,228 @@ impl Participant {
         let w = Generator::new_uint(self.mpvss.length as usize)
             .mod_floor(&self.mpvss.q.to_biguint().unwrap());
         self.extract_share(shares_box, private_key, &w.to_bigint().unwrap())
+    }
+
+    /// Verifies that the shares the distribution  shares box consists are consistent so that they can be used to reconstruct the secret later.
+    ///
+    /// - Parameter distribute_sharesbox: The distribution shares box whose consistency is to be verified.
+    /// - Returns: Returns `true` if the shares are correct and `false` otherwise.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// use num_bigint::{BigUint, ToBigInt};
+    /// let secret_message = String::from("Hello MPVSS Example.");
+    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// let mut p1 = Participant::new();
+    /// let mut p2 = Participant::new();
+    /// let mut p3 = Participant::new();
+    /// p1.initialize();
+    /// p2.initialize();
+    /// p3.initialize();
+    ///
+    /// let distribute_shares_box = dealer.distribute_secret(
+    ///     secret.to_bigint().unwrap(),
+    ///     vec![
+    ///         p1.publickey.clone(),
+    ///         p2.publickey.clone(),
+    ///         p3.publickey.clone(),
+    ///     ],
+    ///     3,
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p1.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p2.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+
+    /// assert_eq!(
+    ///     p3.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+    /// ```
+    pub fn verify_distribution_shares(
+        &self,
+        distribute_sharesbox: &DistributionSharesBox,
+    ) -> bool {
+        self.mpvss.verify_distribution_shares(distribute_sharesbox)
+    }
+
+    /// Verifies if the share in the distribution share box was decrypted correctly by the respective participant.
+    ///
+    /// - Parameters:
+    ///   - shareBox: The share box containing the share to be verified.
+    ///   - distributionShareBox: The distribution share box that contains the share.
+    ///   - publicKey: The public key of the sender of the share bundle.
+    /// - Returns: Returns `true` if the share in the distribution share box matches the decryption of the encrypted share and `false` otherwise.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// use num_bigint::{BigUint, ToBigInt};
+    ///
+    /// let secret_message = String::from("Hello MPVSS Example.");
+    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// let mut p1 = Participant::new();
+    /// let mut p2 = Participant::new();
+    /// let mut p3 = Participant::new();
+    /// p1.initialize();
+    /// p2.initialize();
+    /// p3.initialize();
+    ///
+    /// let distribute_shares_box = dealer.distribute_secret(
+    ///    secret.to_bigint().unwrap(),
+    ///    vec![
+    ///        p1.publickey.clone(),
+    ///        p2.publickey.clone(),
+    ///        p3.publickey.clone(),
+    ///    ],
+    ///    3,
+    /// );
+    ///
+    ///  let s1 = p1
+    ///        .extract_secret_share(&distribute_shares_box, &p1.privatekey)
+    ///        .unwrap();
+    ///  let s2 = p2
+    ///        .extract_secret_share(&distribute_shares_box, &p2.privatekey)
+    ///        .unwrap();
+    ///  let s3 = p3
+    ///        .extract_secret_share(&distribute_shares_box, &p3.privatekey)
+    ///        .unwrap();
+    ///
+    ///  assert_eq!(
+    ///    p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
+    ///      true
+    ///   );
+    ///
+    ///  assert_eq!(
+    ///    p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
+    ///      true
+    ///   );
+    ///
+    ///  assert_eq!(
+    ///    p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
+    ///      true
+    ///   );
+    /// ```
+    pub fn verify_share(
+        &self,
+        sharebox: &ShareBox,
+        distribution_sharebox: &DistributionSharesBox,
+        publickey: &BigInt,
+    ) -> bool {
+        self.mpvss
+            .verify_share(sharebox, distribution_sharebox, publickey)
+    }
+
+    /// Reconstruct secret from share boxs
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// use num_bigint::{BigUint, ToBigInt};
+    /// let secret_message = String::from("Hello MPVSS Example.");
+    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// let mut p1 = Participant::new();
+    /// let mut p2 = Participant::new();
+    /// let mut p3 = Participant::new();
+    /// p1.initialize();
+    /// p2.initialize();
+    /// p3.initialize();
+    ///
+    /// let distribute_shares_box = dealer.distribute_secret(
+    ///     secret.to_bigint().unwrap(),
+    ///     vec![
+    ///         p1.publickey.clone(),
+    ///         p2.publickey.clone(),
+    ///         p3.publickey.clone(),
+    ///     ],
+    ///     3,
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p1.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p2.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p3.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+    ///
+    ///
+    /// let s1 = p1
+    ///     .extract_secret_share(&distribute_shares_box, &p1.privatekey)
+    ///     .unwrap();
+    ///
+    /// let s2 = p2
+    ///     .extract_secret_share(&distribute_shares_box, &p2.privatekey)
+    ///     .unwrap();
+    /// let s3 = p3
+    ///     .extract_secret_share(&distribute_shares_box, &p3.privatekey)
+    ///     .unwrap();
+    ///
+    /// assert_eq!(
+    ///     p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
+    ///     true
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
+    ///     true
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
+    ///     true
+    /// );
+    ///
+    /// let share_boxs = [s1, s2, s3];
+    /// let r1 = p1
+    ///     .reconstruct(&share_boxs, &distribute_shares_box)
+    ///     .unwrap();
+    /// let r2 = p2
+    ///     .reconstruct(&share_boxs, &distribute_shares_box)
+    ///     .unwrap();
+    /// let r3 = p3
+    ///     .reconstruct(&share_boxs, &distribute_shares_box)
+    ///     .unwrap();
+    ///
+    /// let r1_str =
+    ///     String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
+    /// assert_eq!(secret_message.clone(), r1_str);
+    /// let r2_str =
+    ///     String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
+    /// assert_eq!(secret_message.clone(), r2_str);
+    /// let r3_str =
+    ///     String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
+    /// assert_eq!(secret_message.clone(), r3_str);
+    /// ```
+    pub fn reconstruct(
+        &self,
+        share_boxs: &[ShareBox],
+        distribute_share_box: &DistributionSharesBox,
+    ) -> Option<BigInt> {
+        self.mpvss.reconstruct(share_boxs, distribute_share_box)
     }
 }
 
