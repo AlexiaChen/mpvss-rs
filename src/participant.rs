@@ -30,6 +30,13 @@ pub struct Participant {
 
 impl Participant {
     /// Create A default participant
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// let mut dealer = Participant::new();
+    /// ```
     pub fn new() -> Self {
         return Participant {
             mpvss: MPVSS::new(),
@@ -38,6 +45,14 @@ impl Participant {
         };
     }
     /// Initializes a new participant with the default MPVSS.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// ```
     pub fn initialize(&mut self) {
         self.privatekey = self.mpvss.generate_private_key();
         self.publickey = self.mpvss.generate_public_key(&self.privatekey);
@@ -227,6 +242,34 @@ impl Participant {
     ///   - threshold: The number of shares that is needed in order to reconstruct the secret. It must not be greater than the total number of participants.
     /// - Requires: `threshold` <= number of participants
     /// - Returns: The distribution shares Box that is published to everyone (especially but not only the participants) can check the shares' integrity. Furthermore the participants extract their shares from it.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// use num_bigint::{BigUint, ToBigInt};
+    ///
+    /// let secret_message = String::from("Hello MPVSS Example.");
+    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// let mut p1 = Participant::new();
+    /// let mut p2 = Participant::new();
+    /// let mut p3 = Participant::new();
+    /// p1.initialize();
+    /// p2.initialize();
+    /// p3.initialize();
+    ///
+    /// let distribute_shares_box = dealer.distribute_secret(
+    ///    secret.to_bigint().unwrap(),
+    ///    vec![
+    ///        p1.publickey.clone(),
+    ///        p2.publickey.clone(),
+    ///        p3.publickey.clone(),
+    ///    ],
+    ///    3,
+    /// );
+    /// ```
     pub fn distribute_secret(
         &mut self,
         secret: BigInt,
@@ -341,6 +384,44 @@ impl Participant {
     /// - Returns: The share box that is to be submitted to all the other participants in order to reconstruct the secret.
     ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
     ///     Return `None` if the distribution shares box does not contain a share for the participant.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// use num_bigint::{BigUint, ToBigInt};
+    ///
+    /// let secret_message = String::from("Hello MPVSS Example.");
+    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// let mut p1 = Participant::new();
+    /// let mut p2 = Participant::new();
+    /// let mut p3 = Participant::new();
+    /// p1.initialize();
+    /// p2.initialize();
+    /// p3.initialize();
+    ///
+    /// let distribute_shares_box = dealer.distribute_secret(
+    ///    secret.to_bigint().unwrap(),
+    ///    vec![
+    ///        p1.publickey.clone(),
+    ///        p2.publickey.clone(),
+    ///        p3.publickey.clone(),
+    ///    ],
+    ///    3,
+    /// );
+    ///
+    ///  let s1 = p1
+    ///        .extract_secret_share(&distribute_shares_box, &p1.privatekey)
+    ///        .unwrap();
+    ///  let s2 = p2
+    ///        .extract_secret_share(&distribute_shares_box, &p2.privatekey)
+    ///        .unwrap();
+    ///  let s3 = p3
+    ///        .extract_secret_share(&distribute_shares_box, &p3.privatekey)
+    ///        .unwrap();
+    /// ```
     pub fn extract_secret_share(
         &self,
         shares_box: &DistributionSharesBox,
