@@ -595,10 +595,10 @@ mod tests {
 
         let setup = Setup::new();
         assert_eq!(
-            setup.mpvss.verify(
+            setup.mpvss.verify_share(
                 &share_box,
-                &distribution_shares_box.shares
-                    [&setup.mpvss.generate_public_key(&private_key)]
+                &distribution_shares_box,
+                &setup.mpvss.generate_public_key(&private_key)
             ),
             true
         );

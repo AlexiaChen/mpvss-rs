@@ -117,17 +117,7 @@ impl MPVSS {
         self.verify(sharebox, encrypted_share.unwrap())
     }
 
-    /// Verifies if the share in the share bundle was decrypted correctly by the respective participant.
-    ///
-    /// - Parameters:
-    ///   - shareBox: The share box containing the share to be verified.
-    ///   - encryptedShare: The encrypted share from the distribution share box.
-    /// - Returns: Returns `true` if the share in the share box matches the decryption of the encrypted share and `false` otherwise.
-    pub fn verify(
-        &self,
-        sharebox: &ShareBox,
-        encrypted_share: &BigInt,
-    ) -> bool {
+    fn verify(&self, sharebox: &ShareBox, encrypted_share: &BigInt) -> bool {
         // Verification of the share.
         // Using publickey,encrypted_hsare,decrypted_share,response and c as input, the verifier computes a_1i,a_2i as:
         // a_1i = G^r * publickey^c,   a_2i = decrypted_shar^r * encrypted_share^c

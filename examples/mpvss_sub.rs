@@ -72,25 +72,25 @@ fn main() {
 
     assert_eq!(
         p1.mpvss
-            .verify(&s2, &distribute_shares_box.shares[&p2.publickey]),
+            .verify_share(&s2, &distribute_shares_box, &p2.publickey),
         true
     );
 
     assert_eq!(
         p2.mpvss
-            .verify(&s3, &distribute_shares_box.shares[&p3.publickey]),
+            .verify_share(&s3, &distribute_shares_box, &p3.publickey),
         true
     );
 
     assert_eq!(
         p3.mpvss
-            .verify(&s1, &distribute_shares_box.shares[&s1.publickey]),
+            .verify_share(&s1, &distribute_shares_box, &s1.publickey),
         true
     );
 
     assert_eq!(
         p4.mpvss
-            .verify(&s2, &distribute_shares_box.shares[&s2.publickey]),
+            .verify_share(&s2, &distribute_shares_box, &s2.publickey),
         true
     );
 
