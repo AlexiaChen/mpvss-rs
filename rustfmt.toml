@@ -1,0 +1,4 @@
+edition = "2018"
+hard_tabs = false
+max_width = 80
+tab_spaces = 4

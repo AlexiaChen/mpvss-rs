@@ -1,6 +1,6 @@
-// Copyright 2020-2021 The MPVSS Author: MathxH Chen.
+// Copyright 2020-2021  MathxH Chen.
 //
-// Code is licensed under AGPL License, Version 3.0.
+// Code is licensed under GPLv3.0 License.
 
 use num_bigint::{BigInt, Sign};
 use num_traits::identities::{One, Zero};
@@ -35,7 +35,8 @@ impl Util {
         if g != BigInt::one() {
             None
         } else {
-            let result = (x.clone() % modular.clone() + modular.clone()) % modular.clone();
+            let result = (x.clone() % modular.clone() + modular.clone())
+                % modular.clone();
             Some(result)
         }
     }
@@ -97,7 +98,8 @@ mod tests {
         // 3*inverse = 1 mod 26
         let does_exist = Util::mod_inverse(&BigInt::from(3), &BigInt::from(26));
         // 4*inverse = 1 mod 32
-        let does_not_exist = Util::mod_inverse(&BigInt::from(4), &BigInt::from(32));
+        let does_not_exist =
+            Util::mod_inverse(&BigInt::from(4), &BigInt::from(32));
 
         match does_exist {
             Some(x) => assert_eq!(x, BigInt::from(9)),
@@ -162,8 +164,10 @@ mod tests {
     #[test]
     fn test_hash() {
         let mut sha256 = Sha256::new();
-        let value_1 = BigInt::from_str_radix("43589072349864890574839", 10).unwrap();
-        let value_2 = BigInt::from_str_radix("14735247304952934566", 10).unwrap();
+        let value_1 =
+            BigInt::from_str_radix("43589072349864890574839", 10).unwrap();
+        let value_2 =
+            BigInt::from_str_radix("14735247304952934566", 10).unwrap();
         let value_1_uint = value_1.to_biguint().unwrap();
         let value_2_uint = value_2.to_biguint().unwrap();
         sha256.update(value_1_uint.to_str_radix(10).as_bytes());

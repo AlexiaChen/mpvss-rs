@@ -1,6 +1,6 @@
-// Copyright 2020-2021 The MPVSS Author: MathxH Chen.
+// Copyright 2020-2021  MathxH Chen.
 //
-// Code is licensed under AGPL License, Version 3.0.
+// Code is licensed under GPLv3.0 License.
 
 #![allow(non_snake_case)]
 
@@ -23,13 +23,20 @@ use std::option::Option;
 /// A participant represents as a Node in the Distributed Public NetWork
 #[derive(Debug, Clone)]
 pub struct Participant {
-    pub mpvss: MPVSS,
+    mpvss: MPVSS,
     pub privatekey: BigInt,
     pub publickey: BigInt,
 }
 
 impl Participant {
     /// Create A default participant
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// let mut dealer = Participant::new();
+    /// ```
     pub fn new() -> Self {
         return Participant {
             mpvss: MPVSS::new(),
@@ -38,27 +45,20 @@ impl Participant {
         };
     }
     /// Initializes a new participant with the default MPVSS.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// ```
     pub fn initialize(&mut self) {
         self.privatekey = self.mpvss.generate_private_key();
         self.publickey = self.mpvss.generate_public_key(&self.privatekey);
     }
 
-    /// Takes a secret as input and returns the distribution shares Box which is going to be submitted to all the participants the secret is going to be shared with.
-    /// Those participants are specified by their public keys.
-    /// They use the distribution shares box to verify that the shares are correct (without learning anything about the shares that are not supposed to be decrypted by them) and extract their encrypted shares.
-    /// In fact, the distribution shares box can be published to everyone allowing even external parties to verify the integrity of the shares.
-    ///
-    /// - Parameters:
-    ///   - secret: The value that is going to be shared among the other participants.
-    ///   - publicKeys: Array of public keys of each participant the secret is to be shared with.
-    ///   - threshold: The number of shares that is needed in order to reconstruct the secret. It must not be greater than the total number of participants.
-    ///   - polynomial: The polynomial which is going to be used to produce sampling points which represent the shares. Those sampling points allow the receiving participants to reconstruct the polynomial and with it the secret. The degree of the polynomial must be `threshold`-1.
-    ///   - w: An arbitrary chosen value needed for creating the proof that the shares in the distribution shares box are consistent.
-    /// - Requires:
-    ///   - `threshold` <= number of participants
-    ///   - degree of polynomial = `threshold` - 1
-    /// - Returns: The distribution shares box that is published so everyone (especially but not only the participants) can check the shares' integrity. Furthermore the participants extract their shares from it.
-    pub fn distribute(
+    fn distribute(
         &mut self,
         secret: BigInt,
         publickeys: Vec<BigInt>,
@@ -83,10 +83,10 @@ impl Participant {
         // Calculate Ploynomial Coefficients Commitments C_j = g^(a_j) under group of prime q, and  0 <= j < threshold
         for j in 0..threshold {
             commitments.push(
-                self.mpvss
-                    .g
-                    .clone()
-                    .modpow(&polynomial.coefficients[j as usize], &self.mpvss.q),
+                self.mpvss.g.clone().modpow(
+                    &polynomial.coefficients[j as usize],
+                    &self.mpvss.q,
+                ),
             )
         }
 
@@ -107,9 +107,11 @@ impl Participant {
             let mut x: BigInt = BigInt::one();
             let mut exponent: BigInt = BigInt::one();
             for j in 0..=threshold - 1 {
-                x = (x * commitments[j as usize].modpow(&exponent, &self.mpvss.q)) % &self.mpvss.q;
-                exponent =
-                    (exponent * BigInt::from(position)) % (self.mpvss.q.clone() - BigInt::one());
+                x = (x * commitments[j as usize]
+                    .modpow(&exponent, &self.mpvss.q))
+                    % &self.mpvss.q;
+                exponent = (exponent * BigInt::from(position))
+                    % (self.mpvss.q.clone() - BigInt::one());
             }
 
             X.insert(pubkey.clone(), x.clone());
@@ -138,7 +140,8 @@ impl Participant {
 
             // Update challenge hash
             // the challenge c for the protocol is computed as a cryptographic hash of X_i,Y_i,a_1i,a_2i, 1 <= i <= n
-            challenge_hasher.update(x.to_biguint().unwrap().to_str_radix(10).as_bytes());
+            challenge_hasher
+                .update(x.to_biguint().unwrap().to_str_radix(10).as_bytes());
             challenge_hasher.update(
                 encrypted_secret_share
                     .to_biguint()
@@ -166,7 +169,9 @@ impl Participant {
         // the common challenge c
         let challenge_hash = challenge_hasher.finalize();
         let challenge_big_uint = BigUint::from_bytes_be(&challenge_hash[..])
-            .mod_floor(&(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()));
+            .mod_floor(
+                &(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()),
+            );
 
         // Calc response r_i
         let mut responses: BTreeMap<BigInt, BigInt> = BTreeMap::new();
@@ -197,9 +202,9 @@ impl Participant {
         // the general procedure is to let the dealer first run the distribution protocol for a random value s ∈ Zq, and then publish U = σ ⊕ H(G^s),
         // where H is an appropriate cryptographic hash function. The reconstruction protocol will yield G^s, from which we obtain σ = U ⊕ H(G^s).
         let shared_value = self.mpvss.G.modpow(
-            &polynomial
-                .get_value(BigInt::zero())
-                .mod_floor(&(self.mpvss.q.clone().to_bigint().unwrap() - BigInt::one())),
+            &polynomial.get_value(BigInt::zero()).mod_floor(
+                &(self.mpvss.q.clone().to_bigint().unwrap() - BigInt::one()),
+            ),
             &self.mpvss.q,
         );
         let sha256_hash = sha2::Sha256::digest(
@@ -209,8 +214,8 @@ impl Participant {
                 .to_str_radix(10)
                 .as_bytes(),
         );
-        let hash_big_uint =
-            BigUint::from_bytes_be(&sha256_hash[..]).mod_floor(&self.mpvss.q.to_biguint().unwrap());
+        let hash_big_uint = BigUint::from_bytes_be(&sha256_hash[..])
+            .mod_floor(&self.mpvss.q.to_biguint().unwrap());
         let U = secret.to_biguint().unwrap() ^ hash_big_uint;
 
         // The proof consists of the common challenge c and the n responses r_i.
@@ -237,6 +242,34 @@ impl Participant {
     ///   - threshold: The number of shares that is needed in order to reconstruct the secret. It must not be greater than the total number of participants.
     /// - Requires: `threshold` <= number of participants
     /// - Returns: The distribution shares Box that is published to everyone (especially but not only the participants) can check the shares' integrity. Furthermore the participants extract their shares from it.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// use num_bigint::{BigUint, ToBigInt};
+    ///
+    /// let secret_message = String::from("Hello MPVSS Example.");
+    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// let mut p1 = Participant::new();
+    /// let mut p2 = Participant::new();
+    /// let mut p3 = Participant::new();
+    /// p1.initialize();
+    /// p2.initialize();
+    /// p3.initialize();
+    ///
+    /// let distribute_shares_box = dealer.distribute_secret(
+    ///    secret.to_bigint().unwrap(),
+    ///    vec![
+    ///        p1.publickey.clone(),
+    ///        p2.publickey.clone(),
+    ///        p3.publickey.clone(),
+    ///    ],
+    ///    3,
+    /// );
+    /// ```
     pub fn distribute_secret(
         &mut self,
         secret: BigInt,
@@ -250,7 +283,8 @@ impl Participant {
         );
 
         let mut rng = rand::thread_rng();
-        let w: BigUint = rng.gen_biguint_below(&self.mpvss.q.to_biguint().unwrap());
+        let w: BigUint =
+            rng.gen_biguint_below(&self.mpvss.q.to_biguint().unwrap());
         self.distribute(
             secret,
             publickeys,
@@ -260,32 +294,27 @@ impl Participant {
         )
     }
 
-    /// Extracts the share from a given distribution shares box that is addressed to the calling participant.
-    /// The extracted share is bundled with a proof which allows the other participants to verify the share's correctness.
-    ///
-    /// - Parameters:
-    ///   - distributionBundle: The distribution shares box that consists the share to be extracted.
-    ///   - privateKey: The participant's private key used to decrypt the share.
-    ///   - w: An arbitrary chosen value needed for creating the proof that the share is correct.
-    /// - Returns: The share box that is to be submitted to all the other participants in order to reconstruct the secret.
-    ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
-    ///     Return `None` if the distribution shares box does not contain a share for the participant.
-    pub fn extract_share(
+    fn extract_share(
         &self,
         shares_box: &DistributionSharesBox,
         private_key: &BigInt,
         w: &BigInt,
     ) -> Option<ShareBox> {
         let public_key = self.mpvss.generate_public_key(&private_key);
-        let encrypted_secret_share = shares_box.shares.get(&public_key).unwrap();
+        let encrypted_secret_share =
+            shares_box.shares.get(&public_key).unwrap();
 
         // Decryption of the shares.
         // Using its private key x_i, each participant finds the decrypted share S_i = G^p(i) from Y_i by computing S_i = Y_i^(1/x_i).
         // Y_i is encrypted share: Y_i = y_i^p(i)
         // find modular multiplicative inverses of private key
-        let privkey_inverse =
-            Util::mod_inverse(&private_key, &(self.mpvss.q.clone() - BigInt::one())).unwrap();
-        let decrypted_share = encrypted_secret_share.modpow(&privkey_inverse, &self.mpvss.q);
+        let privkey_inverse = Util::mod_inverse(
+            &private_key,
+            &(self.mpvss.q.clone() - BigInt::one()),
+        )
+        .unwrap();
+        let decrypted_share =
+            encrypted_secret_share.modpow(&privkey_inverse, &self.mpvss.q);
 
         // To this end it suffices to prove knowledge of an α such that y_i= G^α and Y_i= S_i^α, which is accomplished by the non-interactive version of the protocol DLEQ(G,y_i,S_i,Y_i).
         // DLEQ(G,y_i,S_i,Y_i) => DLEQ(G, publickey, decrypted_share, encryted_share)
@@ -303,7 +332,9 @@ impl Participant {
         );
 
         let mut challenge_hasher = Sha256::new();
-        challenge_hasher.update(public_key.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        challenge_hasher.update(
+            public_key.to_biguint().unwrap().to_str_radix(10).as_bytes(),
+        );
         challenge_hasher.update(
             encrypted_secret_share
                 .to_biguint()
@@ -329,7 +360,9 @@ impl Participant {
         // the challenge c
         let challenge_hash = challenge_hasher.finalize();
         let challenge_big_uint = BigUint::from_bytes_be(&challenge_hash[..])
-            .mod_floor(&(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()));
+            .mod_floor(
+                &(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()),
+            );
         dleq.c = Some(challenge_big_uint.clone().to_bigint().unwrap());
 
         let mut share_box = ShareBox::new();
@@ -351,6 +384,44 @@ impl Participant {
     /// - Returns: The share box that is to be submitted to all the other participants in order to reconstruct the secret.
     ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
     ///     Return `None` if the distribution shares box does not contain a share for the participant.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// use num_bigint::{BigUint, ToBigInt};
+    ///
+    /// let secret_message = String::from("Hello MPVSS Example.");
+    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// let mut p1 = Participant::new();
+    /// let mut p2 = Participant::new();
+    /// let mut p3 = Participant::new();
+    /// p1.initialize();
+    /// p2.initialize();
+    /// p3.initialize();
+    ///
+    /// let distribute_shares_box = dealer.distribute_secret(
+    ///    secret.to_bigint().unwrap(),
+    ///    vec![
+    ///        p1.publickey.clone(),
+    ///        p2.publickey.clone(),
+    ///        p3.publickey.clone(),
+    ///    ],
+    ///    3,
+    /// );
+    ///
+    ///  let s1 = p1
+    ///        .extract_secret_share(&distribute_shares_box, &p1.privatekey)
+    ///        .unwrap();
+    ///  let s2 = p2
+    ///        .extract_secret_share(&distribute_shares_box, &p2.privatekey)
+    ///        .unwrap();
+    ///  let s3 = p3
+    ///        .extract_secret_share(&distribute_shares_box, &p3.privatekey)
+    ///        .unwrap();
+    /// ```
     pub fn extract_secret_share(
         &self,
         shares_box: &DistributionSharesBox,
@@ -359,6 +430,228 @@ impl Participant {
         let w = Generator::new_uint(self.mpvss.length as usize)
             .mod_floor(&self.mpvss.q.to_biguint().unwrap());
         self.extract_share(shares_box, private_key, &w.to_bigint().unwrap())
+    }
+
+    /// Verifies that the shares the distribution  shares box consists are consistent so that they can be used to reconstruct the secret later.
+    ///
+    /// - Parameter distribute_sharesbox: The distribution shares box whose consistency is to be verified.
+    /// - Returns: Returns `true` if the shares are correct and `false` otherwise.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// use num_bigint::{BigUint, ToBigInt};
+    /// let secret_message = String::from("Hello MPVSS Example.");
+    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// let mut p1 = Participant::new();
+    /// let mut p2 = Participant::new();
+    /// let mut p3 = Participant::new();
+    /// p1.initialize();
+    /// p2.initialize();
+    /// p3.initialize();
+    ///
+    /// let distribute_shares_box = dealer.distribute_secret(
+    ///     secret.to_bigint().unwrap(),
+    ///     vec![
+    ///         p1.publickey.clone(),
+    ///         p2.publickey.clone(),
+    ///         p3.publickey.clone(),
+    ///     ],
+    ///     3,
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p1.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p2.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+
+    /// assert_eq!(
+    ///     p3.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+    /// ```
+    pub fn verify_distribution_shares(
+        &self,
+        distribute_sharesbox: &DistributionSharesBox,
+    ) -> bool {
+        self.mpvss.verify_distribution_shares(distribute_sharesbox)
+    }
+
+    /// Verifies if the share in the distribution share box was decrypted correctly by the respective participant.
+    ///
+    /// - Parameters:
+    ///   - shareBox: The share box containing the share to be verified.
+    ///   - distributionShareBox: The distribution share box that contains the share.
+    ///   - publicKey: The public key of the sender of the share bundle.
+    /// - Returns: Returns `true` if the share in the distribution share box matches the decryption of the encrypted share and `false` otherwise.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// use num_bigint::{BigUint, ToBigInt};
+    ///
+    /// let secret_message = String::from("Hello MPVSS Example.");
+    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// let mut p1 = Participant::new();
+    /// let mut p2 = Participant::new();
+    /// let mut p3 = Participant::new();
+    /// p1.initialize();
+    /// p2.initialize();
+    /// p3.initialize();
+    ///
+    /// let distribute_shares_box = dealer.distribute_secret(
+    ///    secret.to_bigint().unwrap(),
+    ///    vec![
+    ///        p1.publickey.clone(),
+    ///        p2.publickey.clone(),
+    ///        p3.publickey.clone(),
+    ///    ],
+    ///    3,
+    /// );
+    ///
+    ///  let s1 = p1
+    ///        .extract_secret_share(&distribute_shares_box, &p1.privatekey)
+    ///        .unwrap();
+    ///  let s2 = p2
+    ///        .extract_secret_share(&distribute_shares_box, &p2.privatekey)
+    ///        .unwrap();
+    ///  let s3 = p3
+    ///        .extract_secret_share(&distribute_shares_box, &p3.privatekey)
+    ///        .unwrap();
+    ///
+    ///  assert_eq!(
+    ///    p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
+    ///      true
+    ///   );
+    ///
+    ///  assert_eq!(
+    ///    p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
+    ///      true
+    ///   );
+    ///
+    ///  assert_eq!(
+    ///    p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
+    ///      true
+    ///   );
+    /// ```
+    pub fn verify_share(
+        &self,
+        sharebox: &ShareBox,
+        distribution_sharebox: &DistributionSharesBox,
+        publickey: &BigInt,
+    ) -> bool {
+        self.mpvss
+            .verify_share(sharebox, distribution_sharebox, publickey)
+    }
+
+    /// Reconstruct secret from share boxs
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use mpvss_rs::Participant;
+    /// use num_bigint::{BigUint, ToBigInt};
+    /// let secret_message = String::from("Hello MPVSS Example.");
+    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
+    /// let mut dealer = Participant::new();
+    /// dealer.initialize();
+    /// let mut p1 = Participant::new();
+    /// let mut p2 = Participant::new();
+    /// let mut p3 = Participant::new();
+    /// p1.initialize();
+    /// p2.initialize();
+    /// p3.initialize();
+    ///
+    /// let distribute_shares_box = dealer.distribute_secret(
+    ///     secret.to_bigint().unwrap(),
+    ///     vec![
+    ///         p1.publickey.clone(),
+    ///         p2.publickey.clone(),
+    ///         p3.publickey.clone(),
+    ///     ],
+    ///     3,
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p1.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p2.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p3.verify_distribution_shares(&distribute_shares_box),
+    ///     true
+    /// );
+    ///
+    ///
+    /// let s1 = p1
+    ///     .extract_secret_share(&distribute_shares_box, &p1.privatekey)
+    ///     .unwrap();
+    ///
+    /// let s2 = p2
+    ///     .extract_secret_share(&distribute_shares_box, &p2.privatekey)
+    ///     .unwrap();
+    /// let s3 = p3
+    ///     .extract_secret_share(&distribute_shares_box, &p3.privatekey)
+    ///     .unwrap();
+    ///
+    /// assert_eq!(
+    ///     p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
+    ///     true
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
+    ///     true
+    /// );
+    ///
+    /// assert_eq!(
+    ///     p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
+    ///     true
+    /// );
+    ///
+    /// let share_boxs = [s1, s2, s3];
+    /// let r1 = p1
+    ///     .reconstruct(&share_boxs, &distribute_shares_box)
+    ///     .unwrap();
+    /// let r2 = p2
+    ///     .reconstruct(&share_boxs, &distribute_shares_box)
+    ///     .unwrap();
+    /// let r3 = p3
+    ///     .reconstruct(&share_boxs, &distribute_shares_box)
+    ///     .unwrap();
+    ///
+    /// let r1_str =
+    ///     String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
+    /// assert_eq!(secret_message.clone(), r1_str);
+    /// let r2_str =
+    ///     String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
+    /// assert_eq!(secret_message.clone(), r2_str);
+    /// let r3_str =
+    ///     String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
+    /// assert_eq!(secret_message.clone(), r3_str);
+    /// ```
+    pub fn reconstruct(
+        &self,
+        share_boxs: &[ShareBox],
+        distribute_share_box: &DistributionSharesBox,
+    ) -> Option<BigInt> {
+        self.mpvss.reconstruct(share_boxs, distribute_share_box)
     }
 }
 
@@ -416,7 +709,8 @@ mod tests {
         ]);
         let threshold: i32 = 3;
         // from participant 1 to 3
-        let privatekeys = [BigInt::from(7901), BigInt::from(4801), BigInt::from(1453)];
+        let privatekeys =
+            [BigInt::from(7901), BigInt::from(4801), BigInt::from(1453)];
         let mut publickeys = vec![];
         let w = BigInt::from(6345);
 
@@ -460,15 +754,25 @@ mod tests {
             BigInt::from(63484157),
         ];
         let mut shares: BTreeMap<BigInt, BigInt> = BTreeMap::new();
-        shares.insert(distribution.publickeys[0].clone(), BigInt::from(42478042));
-        shares.insert(distribution.publickeys[1].clone(), BigInt::from(80117658));
-        shares.insert(distribution.publickeys[2].clone(), BigInt::from(86941725));
+        shares
+            .insert(distribution.publickeys[0].clone(), BigInt::from(42478042));
+        shares
+            .insert(distribution.publickeys[1].clone(), BigInt::from(80117658));
+        shares
+            .insert(distribution.publickeys[2].clone(), BigInt::from(86941725));
 
         let challenge = BigInt::from(41963410);
         let mut responses: BTreeMap<BigInt, BigInt> = BTreeMap::new();
-        responses.insert(distribution.publickeys[0].clone(), BigInt::from(151565889));
-        responses.insert(distribution.publickeys[1].clone(), BigInt::from(146145105));
-        responses.insert(distribution.publickeys[2].clone(), BigInt::from(71350321));
+        responses.insert(
+            distribution.publickeys[0].clone(),
+            BigInt::from(151565889),
+        );
+        responses.insert(
+            distribution.publickeys[1].clone(),
+            BigInt::from(146145105),
+        );
+        responses
+            .insert(distribution.publickeys[2].clone(), BigInt::from(71350321));
 
         assert_eq!(distribution.publickeys[0], distribution.publickeys[0]);
         assert_eq!(distribution.publickeys[1], distribution.publickeys[1]);
@@ -513,9 +817,10 @@ mod tests {
 
         let setup = Setup::new();
         assert_eq!(
-            setup.mpvss.verify(
+            setup.mpvss.verify_share(
                 &share_box,
-                &distribution_shares_box.shares[&setup.mpvss.generate_public_key(&private_key)]
+                &distribution_shares_box,
+                &setup.mpvss.generate_public_key(&private_key)
             ),
             true
         );

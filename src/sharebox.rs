@@ -1,6 +1,6 @@
-// Copyright 2020-2021 The MPVSS Author: MathxH Chen.
+// Copyright 2020-2021  MathxH Chen.
 //
-// Code is licensed under AGPL License, Version 3.0.
+// Code is licensed under GPLv3.0 License.
 
 #![allow(non_snake_case)]
 
@@ -27,7 +27,13 @@ impl ShareBox {
         };
     }
 
-    pub fn init(&mut self, publickey: BigInt, share: BigInt, challenge: BigInt, response: BigInt) {
+    pub fn init(
+        &mut self,
+        publickey: BigInt,
+        share: BigInt,
+        challenge: BigInt,
+        response: BigInt,
+    ) {
         self.publickey = publickey;
         self.share = share;
         self.challenge = challenge;

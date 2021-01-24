@@ -1,6 +1,6 @@
-// Copyright 2020-2021 The MPVSS Author: MathxH Chen.
+// Copyright 2020-2021  MathxH Chen.
 //
-// Code is licensed under AGPL License, Version 3.0.
+// Code is licensed under GPLv3.0 License.
 
 use mpvss_rs::Participant;
 use num_bigint::{BigUint, ToBigInt};
@@ -27,20 +27,11 @@ fn main() {
         3,
     );
 
-    assert_eq!(
-        p1.mpvss.verify_distribution_shares(&distribute_shares_box),
-        true
-    );
+    assert_eq!(p1.verify_distribution_shares(&distribute_shares_box), true);
 
-    assert_eq!(
-        p2.mpvss.verify_distribution_shares(&distribute_shares_box),
-        true
-    );
+    assert_eq!(p2.verify_distribution_shares(&distribute_shares_box), true);
 
-    assert_eq!(
-        p3.mpvss.verify_distribution_shares(&distribute_shares_box),
-        true
-    );
+    assert_eq!(p3.verify_distribution_shares(&distribute_shares_box), true);
 
     // p1 extracts the share. [p2 and p3 do this as well.]
     let s1 = p1
@@ -59,42 +50,33 @@ fn main() {
     // p1 verifies the share received from p2. [Actually everybody verifies every received share.]
 
     assert_eq!(
-        p1.mpvss
-            .verify(&s2, &distribute_shares_box.shares[&p2.publickey]),
+        p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
         true
     );
 
     assert_eq!(
-        p2.mpvss
-            .verify(&s3, &distribute_shares_box.shares[&p3.publickey]),
+        p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
         true
     );
 
     assert_eq!(
-        p3.mpvss
-            .verify(&s1, &distribute_shares_box.shares[&s1.publickey]),
+        p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
         true
     );
 
     let share_boxs = [s1, s2, s3];
-    let r1 = p1
-        .mpvss
-        .reconstruct(&share_boxs, &distribute_shares_box)
-        .unwrap();
-    let r2 = p2
-        .mpvss
-        .reconstruct(&share_boxs, &distribute_shares_box)
-        .unwrap();
-    let r3 = p3
-        .mpvss
-        .reconstruct(&share_boxs, &distribute_shares_box)
-        .unwrap();
+    let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+    let r2 = p2.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+    let r3 = p3.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
 
-    let r1_str = String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
+    let r1_str =
+        String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
     assert_eq!(secret_message.clone(), r1_str);
-    let r2_str = String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
+    let r2_str =
+        String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
     assert_eq!(secret_message.clone(), r2_str);
-    let r3_str = String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
+    let r3_str =
+        String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
     assert_eq!(secret_message.clone(), r3_str);
 
     println!("secret message: {}", secret_message);

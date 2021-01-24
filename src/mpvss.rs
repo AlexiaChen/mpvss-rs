@@ -1,8 +1,9 @@
-// Copyright 2020-2021 The MPVSS Author: MathxH Chen.
+// Copyright 2020-2021  MathxH Chen.
 //
-// Code is licensed under AGPL License, Version 3.0.
+// Code is licensed under GPLv3.0 License.
 
 #![allow(non_snake_case)]
+#![allow(dead_code)]
 
 use crate::dleq::DLEQ;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
@@ -78,9 +79,11 @@ impl MPVSS {
 
     pub fn generate_private_key(&self) -> BigInt {
         let mut rng = rand::thread_rng();
-        let mut privkey: BigUint = rng.gen_biguint_below(&self.q.to_biguint().unwrap());
+        let mut privkey: BigUint =
+            rng.gen_biguint_below(&self.q.to_biguint().unwrap());
         // We need the private key and q-1 to be coprime so that we can calculate 1/key mod (q-1) during secret reconstruction.
-        while privkey.gcd(&(self.q.clone().to_biguint().unwrap() - BigUint::one()))
+        while privkey
+            .gcd(&(self.q.clone().to_biguint().unwrap() - BigUint::one()))
             != BigUint::one()
         {
             privkey = rng.gen_biguint_below(&self.q.to_biguint().unwrap());
@@ -115,13 +118,7 @@ impl MPVSS {
         self.verify(sharebox, encrypted_share.unwrap())
     }
 
-    /// Verifies if the share in the share bundle was decrypted correctly by the respective participant.
-    ///
-    /// - Parameters:
-    ///   - shareBox: The share box containing the share to be verified.
-    ///   - encryptedShare: The encrypted share from the distribution share box.
-    /// - Returns: Returns `true` if the share in the share box matches the decryption of the encrypted share and `false` otherwise.
-    pub fn verify(&self, sharebox: &ShareBox, encrypted_share: &BigInt) -> bool {
+    fn verify(&self, sharebox: &ShareBox, encrypted_share: &BigInt) -> bool {
         // Verification of the share.
         // Using publickey,encrypted_hsare,decrypted_share,response and c as input, the verifier computes a_1i,a_2i as:
         // a_1i = G^r * publickey^c,   a_2i = decrypted_shar^r * encrypted_share^c
@@ -143,7 +140,10 @@ impl MPVSS {
     ///
     /// - Parameter distribute_sharesbox: The distribution shares box whose consistency is to be verified.
     /// - Returns: Returns `true` if the shares are correct and `false` otherwise.
-    pub fn verify_distribution_shares(&self, distribute_sharesbox: &DistributionSharesBox) -> bool {
+    pub fn verify_distribution_shares(
+        &self,
+        distribute_sharesbox: &DistributionSharesBox,
+    ) -> bool {
         // Verification of the shares.
         // The verifier computes X_i = ∏(j = 0 -> t - 1): (C_j)^(i^j) from the C_j values.
         // Using y_i,X_i,Y_i,r_i, 1 ≤ i ≤ n and c as input, the verifier computes a_1i,a_2i as:
@@ -155,7 +155,10 @@ impl MPVSS {
             let position = distribute_sharesbox.positions.get(&publickey);
             let response = distribute_sharesbox.responses.get(&publickey);
             let encrypted_share = distribute_sharesbox.shares.get(&publickey);
-            if position.is_none() || response.is_none() || encrypted_share.is_none() {
+            if position.is_none()
+                || response.is_none()
+                || encrypted_share.is_none()
+            {
                 return false;
             }
 
@@ -163,8 +166,11 @@ impl MPVSS {
             let mut x: BigInt = BigInt::one();
             let mut exponent: BigInt = BigInt::one();
             for j in 0..distribute_sharesbox.commitments.len() {
-                x = (x * distribute_sharesbox.commitments[j].modpow(&exponent, &self.q)) % &self.q;
-                exponent = (exponent * BigInt::from(position.unwrap().clone() as i64))
+                x = (x * distribute_sharesbox.commitments[j]
+                    .modpow(&exponent, &self.q))
+                    % &self.q;
+                exponent = (exponent
+                    * BigInt::from(position.unwrap().clone() as i64))
                     % &(self.q.clone() - BigInt::one());
             }
 
@@ -184,7 +190,6 @@ impl MPVSS {
     }
 
     /// Reconstruct secret from share boxs
-    ///
     pub fn reconstruct(
         &self,
         share_boxs: &[ShareBox],
@@ -195,7 +200,8 @@ impl MPVSS {
         }
         let mut shares: BTreeMap<i64, BigInt> = BTreeMap::new();
         for share_box in share_boxs.iter() {
-            let position = distribute_share_box.positions.get(&share_box.publickey);
+            let position =
+                distribute_share_box.positions.get(&share_box.publickey);
             if position.is_none() {
                 return None;
             }
@@ -209,24 +215,32 @@ impl MPVSS {
         let values: Vec<i64> = shares.keys().map(|key| *key).collect();
         for (position, share) in shares {
             let mut exponent = BigInt::one();
-            let lagrangeCoefficient = Util::lagrange_coefficient(&position, values.as_slice());
-            if lagrangeCoefficient.0.clone() % lagrangeCoefficient.1.clone() == BigInt::zero() {
+            let lagrangeCoefficient =
+                Util::lagrange_coefficient(&position, values.as_slice());
+            if lagrangeCoefficient.0.clone() % lagrangeCoefficient.1.clone()
+                == BigInt::zero()
+            {
                 // Lagrange coefficient is an integer
-                exponent = lagrangeCoefficient.0.clone() / Util::abs(&lagrangeCoefficient.1);
+                exponent = lagrangeCoefficient.0.clone()
+                    / Util::abs(&lagrangeCoefficient.1);
             } else {
                 // Lagrange coefficient is a proper fraction
                 // Cancel fraction if possible
                 let mut numerator = lagrangeCoefficient.0.to_biguint().unwrap();
-                let mut denominator = Util::abs(&lagrangeCoefficient.1).to_biguint().unwrap();
+                let mut denominator =
+                    Util::abs(&lagrangeCoefficient.1).to_biguint().unwrap();
                 let gcd = numerator.gcd(&denominator);
                 numerator = numerator / gcd.clone();
                 denominator = denominator / gcd.clone();
 
                 let q1 = self.q.clone() - BigInt::one();
-                let inverseDenominator =
-                    Util::mod_inverse(&denominator.to_bigint().unwrap(), &q1.to_bigint().unwrap());
+                let inverseDenominator = Util::mod_inverse(
+                    &denominator.to_bigint().unwrap(),
+                    &q1.to_bigint().unwrap(),
+                );
                 if inverseDenominator.is_some() {
-                    exponent = (numerator.to_bigint().unwrap() * inverseDenominator.unwrap())
+                    exponent = (numerator.to_bigint().unwrap()
+                        * inverseDenominator.unwrap())
                         % q1.clone().to_bigint().unwrap();
                 } else {
                     println!("ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed.");
@@ -238,7 +252,8 @@ impl MPVSS {
                 .modpow(&exponent, &self.q.to_bigint().unwrap());
             if lagrangeCoefficient.0 * lagrangeCoefficient.1 < BigInt::zero() {
                 // Lagrange coefficient was negative. S^(-lambda) = 1/(S^lambda)
-                let inverseFactor = Util::mod_inverse(&factor, &self.q.to_bigint().unwrap());
+                let inverseFactor =
+                    Util::mod_inverse(&factor, &self.q.to_bigint().unwrap());
                 if inverseFactor.is_some() {
                     factor = inverseFactor.unwrap();
                 } else {
@@ -249,11 +264,13 @@ impl MPVSS {
         }
 
         // Reconstruct the secret = H(G^s) xor U
-        let secret_hash =
-            sha2::Sha256::digest(&secret.to_biguint().unwrap().to_str_radix(10).as_bytes());
-        let hash_big_uint =
-            BigUint::from_bytes_be(&secret_hash[..]).mod_floor(&self.q.to_biguint().unwrap());
-        let decrypted_secret = hash_big_uint ^ distribute_share_box.U.clone().to_biguint().unwrap();
+        let secret_hash = sha2::Sha256::digest(
+            &secret.to_biguint().unwrap().to_str_radix(10).as_bytes(),
+        );
+        let hash_big_uint = BigUint::from_bytes_be(&secret_hash[..])
+            .mod_floor(&self.q.to_biguint().unwrap());
+        let decrypted_secret = hash_big_uint
+            ^ distribute_share_box.U.clone().to_biguint().unwrap();
         Some(decrypted_secret.to_bigint().unwrap())
     }
 }
@@ -285,9 +302,10 @@ mod tests {
         assert!(Verification::is_prime(&mpvss.g.to_biguint().unwrap()));
         assert_eq!(
             mpvss.g,
-            ((mpvss.q - BigInt::one()).to_biguint().unwrap() / BigUint::from(2_u32))
-                .to_bigint()
-                .unwrap()
+            ((mpvss.q - BigInt::one()).to_biguint().unwrap()
+                / BigUint::from(2_u32))
+            .to_bigint()
+            .unwrap()
         )
     }
 

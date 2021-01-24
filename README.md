@@ -1,6 +1,8 @@
 # MPVSS - A Simple Publicly Verifiable Secret Sharing Library
 
-![CI](https://github.com/AlexiaChen/mpvss-rs/workflows/CI/badge.svg?branch=master) ![crates.io](https://github.com/AlexiaChen/mpvss-rs/workflows/Release/badge.svg?branch=release)
+![CI](https://github.com/AlexiaChen/mpvss-rs/workflows/CI/badge.svg?branch=master) 
+![crates.io](https://github.com/AlexiaChen/mpvss-rs/workflows/Release/badge.svg?branch=release)
+[![Crates.io](https://img.shields.io/crates/v/mpvss-rs)](https://crates.io/crates/mpvss-rs)
 
 The library implements a simple PVSS scheme in Rust.
 
@@ -28,6 +30,7 @@ cargo test --release
 
 ```rust
 cargo run --release --example mpvss_all
+cargo run --release --example mpvss_sub
 ```
 
 ### Usage
@@ -66,15 +69,15 @@ let distribute_shares_box = dealer.distribute_secret(
 
 // p1 verifies distribution shares box containing encryted shares and proof of zero-knowlege. [p2 and p3 do this as well.]
 assert_eq!(
-    p1.mpvss.verify_distribution_shares(&distribute_shares_box),
+    p1.verify_distribution_shares(&distribute_shares_box),
     true
 );
 assert_eq!(
-    p2.mpvss.verify_distribution_shares(&distribute_shares_box),
+    p2.verify_distribution_shares(&distribute_shares_box),
     true
 );
 assert_eq!(
-    p3.mpvss.verify_distribution_shares(&distribute_shares_box),
+    p3.verify_distribution_shares(&distribute_shares_box),
     true
 );
 ```
@@ -100,18 +103,15 @@ let s3 = p3
 
 // p1 verifies the share received from p2. [Actually everybody verifies every received share.]
 assert_eq!(
-    p1.mpvss
-        .verify(&s2, &distribute_shares_box.shares[&p2.publickey]),
+    p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
     true
 );
 assert_eq!(
-    p2.mpvss
-        .verify(&s3, &distribute_shares_box.shares[&p3.publickey]),
+    p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
     true
 );
 assert_eq!(
-    p3.mpvss
-        .verify(&s1, &distribute_shares_box.shares[&s1.publickey]),
+    p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
     true
 );
 ```
@@ -123,15 +123,12 @@ Once a participant collected at least `threshold` shares the secret can be recon
 ```rust
 let share_boxs = [s1, s2, s3];
 let r1 = p1
-    .mpvss
     .reconstruct(&share_boxs, &distribute_shares_box)
     .unwrap();
 let r2 = p2
-    .mpvss
     .reconstruct(&share_boxs, &distribute_shares_box)
     .unwrap();
 let r3 = p3
-    .mpvss
     .reconstruct(&share_boxs, &distribute_shares_box)
     .unwrap();
 
@@ -164,3 +161,7 @@ Because the ploynomial commitments does not Pedersen commitment and DLEQ is only
 - Torben Pryds Pedersen. [Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing](https://link.springer.com/content/pdf/10.1007%2F3-540-46766-1_9.pdf)
 
 - Chunming Tang. Dingyi Pei. [Non-Interactive and Information-Theoretic Secure Publicly Verifiable Secret Sharing](https://eprint.iacr.org/2004/201.pdf)
+
+## License
+
+GPLv3.0 License(https://www.gnu.org/licenses/gpl-3.0.txt)

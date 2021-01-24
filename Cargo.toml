@@ -7,14 +7,14 @@ license-file = "LICENSE"
 name = "mpvss-rs"
 readme = "README.md"
 repository = "https://github.com/AlexiaChen/mpvss-rs"
-version = "0.0.4"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 num-bigint = {version = "0.2.6", features = ["rand"]}
 num-integer = "0.1.44"
-num-primes = "0.1.1"
-num-traits = "0.2.11"
+num-primes = "0.1.2"
+num-traits = "0.2.14"
 rand = "0.5.6"
 sha2 = "0.9.2"
