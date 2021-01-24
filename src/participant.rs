@@ -43,22 +43,7 @@ impl Participant {
         self.publickey = self.mpvss.generate_public_key(&self.privatekey);
     }
 
-    /// Takes a secret as input and returns the distribution shares Box which is going to be submitted to all the participants the secret is going to be shared with.
-    /// Those participants are specified by their public keys.
-    /// They use the distribution shares box to verify that the shares are correct (without learning anything about the shares that are not supposed to be decrypted by them) and extract their encrypted shares.
-    /// In fact, the distribution shares box can be published to everyone allowing even external parties to verify the integrity of the shares.
-    ///
-    /// - Parameters:
-    ///   - secret: The value that is going to be shared among the other participants.
-    ///   - publicKeys: Array of public keys of each participant the secret is to be shared with.
-    ///   - threshold: The number of shares that is needed in order to reconstruct the secret. It must not be greater than the total number of participants.
-    ///   - polynomial: The polynomial which is going to be used to produce sampling points which represent the shares. Those sampling points allow the receiving participants to reconstruct the polynomial and with it the secret. The degree of the polynomial must be `threshold`-1.
-    ///   - w: An arbitrary chosen value needed for creating the proof that the shares in the distribution shares box are consistent.
-    /// - Requires:
-    ///   - `threshold` <= number of participants
-    ///   - degree of polynomial = `threshold` - 1
-    /// - Returns: The distribution shares box that is published so everyone (especially but not only the participants) can check the shares' integrity. Furthermore the participants extract their shares from it.
-    pub fn distribute(
+    fn distribute(
         &mut self,
         secret: BigInt,
         publickeys: Vec<BigInt>,
@@ -266,17 +251,7 @@ impl Participant {
         )
     }
 
-    /// Extracts the share from a given distribution shares box that is addressed to the calling participant.
-    /// The extracted share is bundled with a proof which allows the other participants to verify the share's correctness.
-    ///
-    /// - Parameters:
-    ///   - distributionBundle: The distribution shares box that consists the share to be extracted.
-    ///   - privateKey: The participant's private key used to decrypt the share.
-    ///   - w: An arbitrary chosen value needed for creating the proof that the share is correct.
-    /// - Returns: The share box that is to be submitted to all the other participants in order to reconstruct the secret.
-    ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
-    ///     Return `None` if the distribution shares box does not contain a share for the participant.
-    pub fn extract_share(
+    fn extract_share(
         &self,
         shares_box: &DistributionSharesBox,
         private_key: &BigInt,
