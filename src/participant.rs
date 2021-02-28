@@ -852,6 +852,12 @@ mod tests {
             .reconstruct(&share_boxs, &distribution_shares_box)
             .unwrap();
         assert_eq!(reconstructed_secret, setup.secret);
+
+        let reconstruct_secret_par = setup
+            .mpvss
+            .reconstruct_parallelized(&share_boxs, &distribution_shares_box)
+            .unwrap();
+        assert_eq!(reconstruct_secret_par, setup.secret);
     }
 
     // (3,4) threshhold reconstruct, participant 3 is not available, 1,2,4 is available
@@ -898,5 +904,11 @@ mod tests {
             .reconstruct(&share_boxs, &distribution_shares_box)
             .unwrap();
         assert_eq!(reconstructed_secret, setup.secret);
+
+        let reconstruct_secret_par = setup
+            .mpvss
+            .reconstruct_parallelized(&share_boxs, &distribution_shares_box)
+            .unwrap();
+        assert_eq!(reconstruct_secret_par, setup.secret);
     }
 }
