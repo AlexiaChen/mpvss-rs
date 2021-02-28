@@ -1,3 +1,9 @@
+# Version 0.2.0
+
+## Features
+
+- Add reconstruct_parallelized API for improve reconstruct performance
+
 # Version 0.1.0
 
 ## Improvements
