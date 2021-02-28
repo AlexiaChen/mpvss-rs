@@ -12,6 +12,7 @@ use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt};
 use num_integer::Integer;
 use num_primes::Generator;
 use num_traits::identities::{One, Zero};
+use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::clone::Clone;
 use std::collections::BTreeMap;
@@ -189,6 +190,61 @@ impl MPVSS {
         dleq.check(&challenge_hasher)
     }
 
+    fn compute_factor(
+        &self,
+        position: i64,
+        share: &BigInt,
+        values: &[i64],
+    ) -> BigInt {
+        let mut exponent = BigInt::one();
+        let lagrangeCoefficient = Util::lagrange_coefficient(&position, values);
+        if lagrangeCoefficient.0.clone() % lagrangeCoefficient.1.clone()
+            == BigInt::zero()
+        {
+            // Lagrange coefficient is an integer
+            exponent = lagrangeCoefficient.0.clone()
+                / Util::abs(&lagrangeCoefficient.1);
+        } else {
+            // Lagrange coefficient is a proper fraction
+            // Cancel fraction if possible
+            let mut numerator = lagrangeCoefficient.0.to_biguint().unwrap();
+            let mut denominator =
+                Util::abs(&lagrangeCoefficient.1).to_biguint().unwrap();
+            let gcd = numerator.gcd(&denominator);
+            numerator = numerator / gcd.clone();
+            denominator = denominator / gcd.clone();
+
+            let q1 = self.q.clone() - BigInt::one();
+            let inverseDenominator = Util::mod_inverse(
+                &denominator.to_bigint().unwrap(),
+                &q1.to_bigint().unwrap(),
+            );
+            if inverseDenominator.is_some() {
+                exponent = (numerator.to_bigint().unwrap()
+                    * inverseDenominator.unwrap())
+                    % q1.clone().to_bigint().unwrap();
+            } else {
+                eprintln!("ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed.");
+            }
+        }
+        let mut factor = share
+            .to_bigint()
+            .unwrap()
+            .modpow(&exponent, &self.q.to_bigint().unwrap());
+        if lagrangeCoefficient.0 * lagrangeCoefficient.1 < BigInt::zero() {
+            // Lagrange coefficient was negative. S^(-lambda) = 1/(S^lambda)
+            let inverseFactor =
+                Util::mod_inverse(&factor, &self.q.to_bigint().unwrap());
+            if inverseFactor.is_some() {
+                factor = inverseFactor.unwrap();
+            } else {
+                eprintln!("ERROR: Lagrange coefficient was negative and does not have an inverse. Share cannot be processed.")
+            }
+        }
+
+        factor
+    }
+
     /// Reconstruct secret from share boxs
     pub fn reconstruct(
         &self,
@@ -214,52 +270,59 @@ impl MPVSS {
         let mut secret: BigInt = BigInt::one();
         let values: Vec<i64> = shares.keys().map(|key| *key).collect();
         for (position, share) in shares {
-            let mut exponent = BigInt::one();
-            let lagrangeCoefficient =
-                Util::lagrange_coefficient(&position, values.as_slice());
-            if lagrangeCoefficient.0.clone() % lagrangeCoefficient.1.clone()
-                == BigInt::zero()
-            {
-                // Lagrange coefficient is an integer
-                exponent = lagrangeCoefficient.0.clone()
-                    / Util::abs(&lagrangeCoefficient.1);
-            } else {
-                // Lagrange coefficient is a proper fraction
-                // Cancel fraction if possible
-                let mut numerator = lagrangeCoefficient.0.to_biguint().unwrap();
-                let mut denominator =
-                    Util::abs(&lagrangeCoefficient.1).to_biguint().unwrap();
-                let gcd = numerator.gcd(&denominator);
-                numerator = numerator / gcd.clone();
-                denominator = denominator / gcd.clone();
+            let factor =
+                self.compute_factor(position, &share, values.as_slice());
+            secret = (secret * factor) % self.q.clone();
+        }
 
-                let q1 = self.q.clone() - BigInt::one();
-                let inverseDenominator = Util::mod_inverse(
-                    &denominator.to_bigint().unwrap(),
-                    &q1.to_bigint().unwrap(),
-                );
-                if inverseDenominator.is_some() {
-                    exponent = (numerator.to_bigint().unwrap()
-                        * inverseDenominator.unwrap())
-                        % q1.clone().to_bigint().unwrap();
-                } else {
-                    println!("ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed.");
-                }
+        // Reconstruct the secret = H(G^s) xor U
+        let secret_hash = sha2::Sha256::digest(
+            &secret.to_biguint().unwrap().to_str_radix(10).as_bytes(),
+        );
+        let hash_big_uint = BigUint::from_bytes_be(&secret_hash[..])
+            .mod_floor(&self.q.to_biguint().unwrap());
+        let decrypted_secret = hash_big_uint
+            ^ distribute_share_box.U.clone().to_biguint().unwrap();
+        Some(decrypted_secret.to_bigint().unwrap())
+    }
+
+    /// Reconstruct secret from share boxs using multi threaded
+    pub fn reconstruct_parallelized(
+        &self,
+        share_boxs: &[ShareBox],
+        distribute_share_box: &DistributionSharesBox,
+    ) -> Option<BigInt> {
+        if share_boxs.len() < distribute_share_box.commitments.len() {
+            return None;
+        }
+        let mut shares: BTreeMap<i64, BigInt> = BTreeMap::new();
+        for share_box in share_boxs.iter() {
+            let position =
+                distribute_share_box.positions.get(&share_box.publickey);
+            if position.is_none() {
+                return None;
             }
-            let mut factor = share
-                .to_bigint()
-                .unwrap()
-                .modpow(&exponent, &self.q.to_bigint().unwrap());
-            if lagrangeCoefficient.0 * lagrangeCoefficient.1 < BigInt::zero() {
-                // Lagrange coefficient was negative. S^(-lambda) = 1/(S^lambda)
-                let inverseFactor =
-                    Util::mod_inverse(&factor, &self.q.to_bigint().unwrap());
-                if inverseFactor.is_some() {
-                    factor = inverseFactor.unwrap();
-                } else {
-                    println!("ERROR: Lagrange coefficient was negative and does not have an inverse. Share cannot be processed.")
-                }
-            }
+            shares.insert(*position.unwrap(), share_box.share.clone());
+        }
+        // Pooling  the shares. Suppose
+        // w.l.o.g.  that  participantsPiproduce  correctvalues for S_i, for i= 1,...,t.
+        // The secret G^s is obtained by Lagrange interpolation:
+        // ∏(i=1->t)(S^λ_i) = ∏(i=1->t)(G^p(i))^λ_i = G^(∑(i=1->t)p(i)*λ_i = G^p(0) = G^s,
+        let mut secret: BigInt = BigInt::one();
+        let values: Vec<i64> = shares.keys().map(|key| *key).collect();
+        let shares_vec: Vec<(i64, BigInt)> = shares
+            .into_iter()
+            .map(|(postion, share)| (postion, share))
+            .collect();
+        let shares_slice = shares_vec.as_slice();
+        let factors: Vec<BigInt> = shares_slice
+            .par_iter()
+            .map(|(position, share)| {
+                self.compute_factor(*position, share, values.as_slice())
+            })
+            .collect();
+
+        for factor in factors {
             secret = (secret * factor) % self.q.clone();
         }
 

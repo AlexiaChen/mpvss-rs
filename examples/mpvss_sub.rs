@@ -102,4 +102,37 @@ fn main() {
     println!("r2 str: {}", r2_str);
     println!("r3 str: {}", r3_str);
     println!("r3 str: {}", r4_str);
+
+    // Improve reconstruct performance
+    let r1 = p1
+        .reconstruct_parallelized(&share_boxs, &distribute_shares_box)
+        .unwrap();
+    let r2 = p2
+        .reconstruct_parallelized(&share_boxs, &distribute_shares_box)
+        .unwrap();
+    let r3 = p3
+        .reconstruct_parallelized(&share_boxs, &distribute_shares_box)
+        .unwrap();
+    let r4 = p4
+        .reconstruct_parallelized(&share_boxs, &distribute_shares_box)
+        .unwrap();
+
+    let r1_str =
+        String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
+    assert_eq!(secret_message.clone(), r1_str);
+    let r2_str =
+        String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
+    assert_eq!(secret_message.clone(), r2_str);
+    let r3_str =
+        String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
+    assert_eq!(secret_message.clone(), r3_str);
+    let r4_str =
+        String::from_utf8(r4.to_biguint().unwrap().to_bytes_be()).unwrap();
+    assert_eq!(secret_message.clone(), r4_str);
+
+    println!("secret message with parallelized: {}", secret_message);
+    println!("r1 str with parallelized: {}", r1_str);
+    println!("r2 str with parallelized: {}", r2_str);
+    println!("r3 str with parallelized: {}", r3_str);
+    println!("r3 str with parallelized: {}", r4_str);
 }
