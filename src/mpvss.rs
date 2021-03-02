@@ -269,47 +269,6 @@ impl MPVSS {
         // ∏(i=1->t)(S^λ_i) = ∏(i=1->t)(G^p(i))^λ_i = G^(∑(i=1->t)p(i)*λ_i = G^p(0) = G^s,
         let mut secret: BigInt = BigInt::one();
         let values: Vec<i64> = shares.keys().map(|key| *key).collect();
-        for (position, share) in shares {
-            let factor =
-                self.compute_factor(position, &share, values.as_slice());
-            secret = (secret * factor) % self.q.clone();
-        }
-
-        // Reconstruct the secret = H(G^s) xor U
-        let secret_hash = sha2::Sha256::digest(
-            &secret.to_biguint().unwrap().to_str_radix(10).as_bytes(),
-        );
-        let hash_big_uint = BigUint::from_bytes_be(&secret_hash[..])
-            .mod_floor(&self.q.to_biguint().unwrap());
-        let decrypted_secret = hash_big_uint
-            ^ distribute_share_box.U.clone().to_biguint().unwrap();
-        Some(decrypted_secret.to_bigint().unwrap())
-    }
-
-    /// Reconstruct secret from share boxs using multi threaded
-    pub fn reconstruct_parallelized(
-        &self,
-        share_boxs: &[ShareBox],
-        distribute_share_box: &DistributionSharesBox,
-    ) -> Option<BigInt> {
-        if share_boxs.len() < distribute_share_box.commitments.len() {
-            return None;
-        }
-        let mut shares: BTreeMap<i64, BigInt> = BTreeMap::new();
-        for share_box in share_boxs.iter() {
-            let position =
-                distribute_share_box.positions.get(&share_box.publickey);
-            if position.is_none() {
-                return None;
-            }
-            shares.insert(*position.unwrap(), share_box.share.clone());
-        }
-        // Pooling  the shares. Suppose
-        // w.l.o.g.  that  participantsPiproduce  correctvalues for S_i, for i= 1,...,t.
-        // The secret G^s is obtained by Lagrange interpolation:
-        // ∏(i=1->t)(S^λ_i) = ∏(i=1->t)(G^p(i))^λ_i = G^(∑(i=1->t)p(i)*λ_i = G^p(0) = G^s,
-        let mut secret: BigInt = BigInt::one();
-        let values: Vec<i64> = shares.keys().map(|key| *key).collect();
         let shares_vec: Vec<(i64, BigInt)> = shares
             .into_iter()
             .map(|(postion, share)| (postion, share))
