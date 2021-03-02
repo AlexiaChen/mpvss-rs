@@ -322,9 +322,9 @@ impl MPVSS {
             })
             .collect();
 
-        for factor in factors {
-            secret = (secret * factor) % self.q.clone();
-        }
+        secret = factors
+            .into_iter()
+            .fold(secret, |acc, factor| (acc * factor) % self.q.clone());
 
         // Reconstruct the secret = H(G^s) xor U
         let secret_hash = sha2::Sha256::digest(
