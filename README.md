@@ -41,7 +41,6 @@ At first we convert our secret message into a numeric value if necessary. When c
 
 ```rust
 let secret_message = String::from("Hello MPVSS.");
-let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
 
 let mut dealer = Participant::new();
 dealer.initialize();
@@ -62,7 +61,7 @@ The dealer splits the secret into shares, encrypts them and creates a proof so t
 ```rust
 // Dealer that shares the secret among p1, p2 and p3.
 let distribute_shares_box = dealer.distribute_secret(
-        secret.to_bigint().unwrap(),
+        string_to_secret(&secret_message),
         vec![p1.publickey, p2.publickey, p3.publickey],
         3,
     );
@@ -132,11 +131,11 @@ let r3 = p3
     .reconstruct(&share_boxs, &distribute_shares_box)
     .unwrap();
 
-let r1_str = String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
+let r1_str = string_from_secret(&r1);
 assert_eq!(secret_message.clone(), r1_str);
-let r2_str = String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
+let r2_str = string_from_secret(&r2);
 assert_eq!(secret_message.clone(), r2_str);
-let r3_str = String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
+let r3_str = string_from_secret(&r3);
 assert_eq!(secret_message.clone(), r3_str);
 ```
 
