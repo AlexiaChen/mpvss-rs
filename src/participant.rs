@@ -653,106 +653,6 @@ impl Participant {
     ) -> Option<BigInt> {
         self.mpvss.reconstruct(share_boxs, distribute_share_box)
     }
-
-    /// Reconstruct secret from share boxs using multi-threads
-    ///
-    /// ## Example
-    ///
-    /// ```rust
-    /// use mpvss_rs::Participant;
-    /// use num_bigint::{BigUint, ToBigInt};
-    /// let secret_message = String::from("Hello MPVSS Example.");
-    /// let secret = BigUint::from_bytes_be(&secret_message.as_bytes());
-    /// let mut dealer = Participant::new();
-    /// dealer.initialize();
-    /// let mut p1 = Participant::new();
-    /// let mut p2 = Participant::new();
-    /// let mut p3 = Participant::new();
-    /// p1.initialize();
-    /// p2.initialize();
-    /// p3.initialize();
-    ///
-    /// let distribute_shares_box = dealer.distribute_secret(
-    ///     secret.to_bigint().unwrap(),
-    ///     vec![
-    ///         p1.publickey.clone(),
-    ///         p2.publickey.clone(),
-    ///         p3.publickey.clone(),
-    ///     ],
-    ///     3,
-    /// );
-    ///
-    /// assert_eq!(
-    ///     p1.verify_distribution_shares(&distribute_shares_box),
-    ///     true
-    /// );
-    ///
-    /// assert_eq!(
-    ///     p2.verify_distribution_shares(&distribute_shares_box),
-    ///     true
-    /// );
-    ///
-    /// assert_eq!(
-    ///     p3.verify_distribution_shares(&distribute_shares_box),
-    ///     true
-    /// );
-    ///
-    ///
-    /// let s1 = p1
-    ///     .extract_secret_share(&distribute_shares_box, &p1.privatekey)
-    ///     .unwrap();
-    ///
-    /// let s2 = p2
-    ///     .extract_secret_share(&distribute_shares_box, &p2.privatekey)
-    ///     .unwrap();
-    /// let s3 = p3
-    ///     .extract_secret_share(&distribute_shares_box, &p3.privatekey)
-    ///     .unwrap();
-    ///
-    /// assert_eq!(
-    ///     p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
-    ///     true
-    /// );
-    ///
-    /// assert_eq!(
-    ///     p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
-    ///     true
-    /// );
-    ///
-    /// assert_eq!(
-    ///     p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
-    ///     true
-    /// );
-    ///
-    /// let share_boxs = [s1, s2, s3];
-    /// let r1 = p1
-    ///     .reconstruct_parallelized(&share_boxs, &distribute_shares_box)
-    ///     .unwrap();
-    /// let r2 = p2
-    ///     .reconstruct_parallelized(&share_boxs, &distribute_shares_box)
-    ///     .unwrap();
-    /// let r3 = p3
-    ///     .reconstruct_parallelized(&share_boxs, &distribute_shares_box)
-    ///     .unwrap();
-    ///
-    /// let r1_str =
-    ///     String::from_utf8(r1.to_biguint().unwrap().to_bytes_be()).unwrap();
-    /// assert_eq!(secret_message.clone(), r1_str);
-    /// let r2_str =
-    ///     String::from_utf8(r2.to_biguint().unwrap().to_bytes_be()).unwrap();
-    /// assert_eq!(secret_message.clone(), r2_str);
-    /// let r3_str =
-    ///     String::from_utf8(r3.to_biguint().unwrap().to_bytes_be()).unwrap();
-    /// assert_eq!(secret_message.clone(), r3_str);
-    /// ```
-    pub fn reconstruct_parallelized(
-        &self,
-        share_boxs: &[ShareBox],
-        distribute_share_box: &DistributionSharesBox,
-    ) -> Option<BigInt> {
-        self.mpvss
-            .reconstruct_parallelized(share_boxs, distribute_share_box)
-    }
 }
 
 #[cfg(test)]
@@ -952,12 +852,6 @@ mod tests {
             .reconstruct(&share_boxs, &distribution_shares_box)
             .unwrap();
         assert_eq!(reconstructed_secret, setup.secret);
-
-        let reconstruct_secret_par = setup
-            .mpvss
-            .reconstruct_parallelized(&share_boxs, &distribution_shares_box)
-            .unwrap();
-        assert_eq!(reconstruct_secret_par, setup.secret);
     }
 
     // (3,4) threshhold reconstruct, participant 3 is not available, 1,2,4 is available
@@ -1004,11 +898,5 @@ mod tests {
             .reconstruct(&share_boxs, &distribution_shares_box)
             .unwrap();
         assert_eq!(reconstructed_secret, setup.secret);
-
-        let reconstruct_secret_par = setup
-            .mpvss
-            .reconstruct_parallelized(&share_boxs, &distribution_shares_box)
-            .unwrap();
-        assert_eq!(reconstruct_secret_par, setup.secret);
     }
 }
