@@ -96,7 +96,7 @@ impl Participant {
         // p(i) is secret share without encrypt on the ploynomial of the degree t - 1
         // y_i is participant public key
         // Y_i is encrypted secret share
-        for pubkey in publickeys.clone() {
+        for pubkey in publickeys {
             positions.insert(pubkey.clone(), position);
             // calc P(position) % (q - 1), from P(1) to P(n), actually is from share 1 to share n
             let secret_share = polynomial.get_value(&BigInt::from(position))
@@ -175,7 +175,7 @@ impl Participant {
 
         // Calc response r_i
         let mut responses: BTreeMap<BigInt, BigInt> = BTreeMap::new();
-        for pubkey in publickeys.clone() {
+        for pubkey in publickeys {
             // DLEQ(g1,h2,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,encrypted_secret_share_from_pubkey)
             let x_i = X.get(&pubkey).unwrap();
             let encrypted_secret_share = shares.get(&pubkey).unwrap();
