@@ -60,11 +60,11 @@ impl Participant {
 
     fn distribute(
         &mut self,
-        secret: BigInt,
-        publickeys: Vec<BigInt>,
+        secret: &BigInt,
+        publickeys: &[BigInt],
         threshold: u32,
-        polynomial: Polynomial,
-        w: BigInt,
+        polynomial: &Polynomial,
+        w: &BigInt,
     ) -> DistributionSharesBox {
         assert!(threshold <= publickeys.len() as u32);
         // Data the distribution shares box is going to be consisting of
@@ -99,7 +99,7 @@ impl Participant {
         for pubkey in publickeys.clone() {
             positions.insert(pubkey.clone(), position);
             // calc P(position) % (q - 1), from P(1) to P(n), actually is from share 1 to share n
-            let secret_share = polynomial.get_value(BigInt::from(position))
+            let secret_share = polynomial.get_value(&BigInt::from(position))
                 % (self.mpvss.q.clone() - BigInt::one());
             sampling_points.insert(pubkey.clone(), secret_share.clone());
 
@@ -202,7 +202,7 @@ impl Participant {
         // the general procedure is to let the dealer first run the distribution protocol for a random value s ∈ Zq, and then publish U = σ ⊕ H(G^s),
         // where H is an appropriate cryptographic hash function. The reconstruction protocol will yield G^s, from which we obtain σ = U ⊕ H(G^s).
         let shared_value = self.mpvss.G.modpow(
-            &polynomial.get_value(BigInt::zero()).mod_floor(
+            &polynomial.get_value(&BigInt::zero()).mod_floor(
                 &(self.mpvss.q.clone().to_bigint().unwrap() - BigInt::one()),
             ),
             &self.mpvss.q,
@@ -221,13 +221,13 @@ impl Participant {
         // The proof consists of the common challenge c and the n responses r_i.
         let mut shares_box = DistributionSharesBox::new();
         shares_box.init(
-            commitments,
+            &commitments,
             positions,
             shares,
             publickeys,
-            challenge_big_uint.to_bigint().unwrap(),
+            &challenge_big_uint.to_bigint().unwrap(),
             responses,
-            U.to_bigint().unwrap(),
+            &U.to_bigint().unwrap(),
         );
         shares_box
     }
@@ -261,8 +261,8 @@ impl Participant {
     /// p3.initialize();
     ///
     /// let distribute_shares_box = dealer.distribute_secret(
-    ///    secret.to_bigint().unwrap(),
-    ///    vec![
+    ///    &secret.to_bigint().unwrap(),
+    ///    &vec![
     ///        p1.publickey.clone(),
     ///        p2.publickey.clone(),
     ///        p3.publickey.clone(),
@@ -272,14 +272,14 @@ impl Participant {
     /// ```
     pub fn distribute_secret(
         &mut self,
-        secret: BigInt,
-        publickeys: Vec<BigInt>,
+        secret: &BigInt,
+        publickeys: &[BigInt],
         threshold: u32,
     ) -> DistributionSharesBox {
         let mut polynomial = Polynomial::new();
         polynomial.init(
             (threshold - 1) as i32,
-            self.mpvss.q.clone().to_bigint().unwrap(),
+            &self.mpvss.q.clone().to_bigint().unwrap(),
         );
 
         let mut rng = rand::thread_rng();
@@ -287,10 +287,10 @@ impl Participant {
             rng.gen_biguint_below(&self.mpvss.q.to_biguint().unwrap());
         self.distribute(
             secret,
-            publickeys,
+            &publickeys,
             threshold,
-            polynomial,
-            w.to_bigint().unwrap(),
+            &polynomial,
+            &w.to_bigint().unwrap(),
         )
     }
 
@@ -403,8 +403,8 @@ impl Participant {
     /// p3.initialize();
     ///
     /// let distribute_shares_box = dealer.distribute_secret(
-    ///    secret.to_bigint().unwrap(),
-    ///    vec![
+    ///    &secret.to_bigint().unwrap(),
+    ///    &vec![
     ///        p1.publickey.clone(),
     ///        p2.publickey.clone(),
     ///        p3.publickey.clone(),
@@ -454,8 +454,8 @@ impl Participant {
     /// p3.initialize();
     ///
     /// let distribute_shares_box = dealer.distribute_secret(
-    ///     secret.to_bigint().unwrap(),
-    ///     vec![
+    ///     &secret.to_bigint().unwrap(),
+    ///     &vec![
     ///         p1.publickey.clone(),
     ///         p2.publickey.clone(),
     ///         p3.publickey.clone(),
@@ -511,8 +511,8 @@ impl Participant {
     /// p3.initialize();
     ///
     /// let distribute_shares_box = dealer.distribute_secret(
-    ///    secret.to_bigint().unwrap(),
-    ///    vec![
+    ///    &secret.to_bigint().unwrap(),
+    ///    &vec![
     ///        p1.publickey.clone(),
     ///        p2.publickey.clone(),
     ///        p3.publickey.clone(),
@@ -574,8 +574,8 @@ impl Participant {
     /// p3.initialize();
     ///
     /// let distribute_shares_box = dealer.distribute_secret(
-    ///     secret.to_bigint().unwrap(),
-    ///     vec![
+    ///     &secret.to_bigint().unwrap(),
+    ///     &vec![
     ///         p1.publickey.clone(),
     ///         p2.publickey.clone(),
     ///         p3.publickey.clone(),
@@ -702,7 +702,7 @@ mod tests {
         dealer.publickey = setup.mpvss.generate_public_key(&setup.privatekey);
 
         let mut polynomial = Polynomial::new();
-        polynomial.init_coefficients(vec![
+        polynomial.init_coefficients(&vec![
             BigInt::from(164102006),
             BigInt::from(43489589),
             BigInt::from(98100795),
@@ -719,11 +719,11 @@ mod tests {
         }
 
         return dealer.distribute(
-            setup.secret.clone(),
-            publickeys,
+            &setup.secret,
+            &publickeys,
             threshold as u32,
-            polynomial,
-            w,
+            &polynomial,
+            &w,
         );
     }
 
@@ -882,13 +882,13 @@ mod tests {
 
         let mut distribution_shares_box = DistributionSharesBox::new();
         distribution_shares_box.init(
-            vec![BigInt::zero(), BigInt::one(), BigInt::from(2)],
+            &vec![BigInt::zero(), BigInt::one(), BigInt::from(2)],
             positions,
             BTreeMap::new(),
-            vec![],
-            BigInt::zero(),
+            &vec![],
+            &BigInt::zero(),
             BTreeMap::new(),
-            BigInt::from(1284073502),
+            &BigInt::from(1284073502),
         );
 
         let setup = Setup::new();
