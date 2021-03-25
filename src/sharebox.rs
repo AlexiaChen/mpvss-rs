@@ -9,7 +9,7 @@ use num_traits::identities::Zero;
 use std::collections::BTreeMap;
 use std::vec::Vec;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ShareBox {
     pub publickey: BigInt,
     pub share: BigInt,

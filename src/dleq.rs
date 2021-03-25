@@ -86,7 +86,7 @@ impl Verifier {
 /// - The verifier sends a random challenge c ∈ R Zq to the prover.
 /// - The prover responds with r = w − αc (mod q).
 /// - The verifier checks that a1 = (g1^r) * (h1^c) and a2 = (g2^r) * (h2^c).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DLEQ {
     pub g1: BigInt,
     pub h1: BigInt,
