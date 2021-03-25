@@ -40,7 +40,7 @@ use std::collections::BTreeMap;
 ///
 /// The generator is: 2.
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MPVSS {
     pub q: BigInt,
     pub g: BigInt,

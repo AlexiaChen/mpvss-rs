@@ -21,7 +21,7 @@ use std::option::Option;
 /// A participant represents one party in the secret sharing scheme. The participant can share a secret among a group of other participants and it is then called the "dealer".
 /// The receiving participants that receive a part of the secret can use it to reconstruct the secret Therefore the partticipants need to collaborate and exchange their parts.
 /// A participant represents as a Node in the Distributed Public NetWork
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Participant {
     mpvss: MPVSS,
     pub privatekey: BigInt,

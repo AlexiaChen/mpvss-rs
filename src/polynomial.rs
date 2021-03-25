@@ -14,7 +14,7 @@ use std::vec::Vec;
 /// s = P(0) = a_0
 /// s_i = P(i)
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Polynomial {
     pub coefficients: Vec<BigInt>,
 }
