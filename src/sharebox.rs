@@ -69,20 +69,20 @@ impl DistributionSharesBox {
 
     pub fn init(
         &mut self,
-        commitments: Vec<BigInt>,
+        commitments: &[BigInt],
         positions: BTreeMap<BigInt, i64>,
         shares: BTreeMap<BigInt, BigInt>,
-        publickeys: Vec<BigInt>,
-        challenge: BigInt,
+        publickeys: &[BigInt],
+        challenge: &BigInt,
         responses: BTreeMap<BigInt, BigInt>,
-        U: BigInt,
+        U: &BigInt,
     ) {
-        self.commitments = commitments;
+        self.commitments = commitments.to_vec();
         self.positions = positions;
         self.shares = shares;
-        self.publickeys = publickeys;
-        self.challenge = challenge;
+        self.publickeys = publickeys.to_vec();
+        self.challenge = challenge.clone();
         self.responses = responses;
-        self.U = U;
+        self.U = U.clone();
     }
 }

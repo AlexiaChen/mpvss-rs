@@ -61,8 +61,8 @@ The dealer splits the secret into shares, encrypts them and creates a proof so t
 ```rust
 // Dealer that shares the secret among p1, p2 and p3.
 let distribute_shares_box = dealer.distribute_secret(
-        string_to_secret(&secret_message),
-        vec![p1.publickey, p2.publickey, p3.publickey],
+        &string_to_secret(&secret_message),
+        &vec![p1.publickey, p2.publickey, p3.publickey],
         3,
     );
 

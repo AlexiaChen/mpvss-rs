@@ -18,8 +18,8 @@ fn test_mpvss_distribute_verify_reconstruct() {
     p3.initialize();
 
     let distribute_shares_box = dealer.distribute_secret(
-        string_to_secret(&secret_message),
-        vec![
+        &string_to_secret(&secret_message),
+        &vec![
             p1.publickey.clone(),
             p2.publickey.clone(),
             p3.publickey.clone(),
