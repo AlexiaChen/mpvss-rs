@@ -43,6 +43,7 @@ impl ShareBox {
 
 /// the  dealer  wishes to distribute a secret among participants P1,...,Pn.
 /// The dealer picks a randompolynomialp of degree at most t−1 with coefficients in Z_q
+#[derive(Debug, Clone, Default)]
 pub struct DistributionSharesBox {
     pub commitments: Vec<BigInt>,
     pub positions: BTreeMap<BigInt, i64>,
