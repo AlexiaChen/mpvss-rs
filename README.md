@@ -166,5 +166,6 @@ Because the ploynomial commitments does not Pedersen commitment and DLEQ is only
 - Chunming Tang. Dingyi Pei. [Non-Interactive and Information-Theoretic Secure Publicly Verifiable Secret Sharing](https://eprint.iacr.org/2004/201.pdf)
 
 ## License
+Dual-licensed to be compatible with the Rust project.
 
-GPLv3.0 License(https://www.gnu.org/licenses/gpl-3.0.txt)
+Licensed under the Apache License, Version 2.0 [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0) or the MIT license [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT), at your option. This file may not be copied, modified, or distributed except according to those terms.
