@@ -83,7 +83,7 @@ impl Participant {
         // Calculate Ploynomial Coefficients Commitments C_j = g^(a_j) under group of prime q, and  0 <= j < threshold
         for j in 0..threshold {
             commitments.push(
-                self.mpvss.g.clone().modpow(
+                self.mpvss.g.modpow(
                     &polynomial.coefficients[j as usize],
                     &self.mpvss.q,
                 ),
@@ -100,7 +100,7 @@ impl Participant {
             positions.insert(pubkey.clone(), position);
             // calc P(position) % (q - 1), from P(1) to P(n), actually is from share 1 to share n
             let secret_share = polynomial.get_value(&BigInt::from(position))
-                % (self.mpvss.q.clone() - BigInt::one());
+                % (&self.mpvss.q - BigInt::one());
             sampling_points.insert(pubkey.clone(), secret_share.clone());
 
             // Calc X_i
@@ -111,14 +111,14 @@ impl Participant {
                     .modpow(&exponent, &self.mpvss.q))
                     % &self.mpvss.q;
                 exponent = (exponent * BigInt::from(position))
-                    % (self.mpvss.q.clone() - BigInt::one());
+                    % (&self.mpvss.q - BigInt::one());
             }
 
             X.insert(pubkey.clone(), x.clone());
 
             // Calc Y_i
             let encrypted_secret_share =
-                pubkey.clone().modpow(&secret_share.clone(), &self.mpvss.q);
+                pubkey.modpow(&secret_share, &self.mpvss.q);
             shares.insert(pubkey.clone(), encrypted_secret_share.clone());
 
             // DLEQ(g1,h2,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,enrypted_secret_share_from_pubkey)
@@ -170,7 +170,7 @@ impl Participant {
         let challenge_hash = challenge_hasher.finalize();
         let challenge_big_uint = BigUint::from_bytes_be(&challenge_hash[..])
             .mod_floor(
-                &(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()),
+                &(self.mpvss.q.to_biguint().unwrap() - BigUint::one()),
             );
 
         // Calc response r_i
@@ -191,7 +191,7 @@ impl Participant {
                 secret_share.clone(),
                 w.clone(),
             );
-            dleq.c = Some(challenge_big_uint.clone().to_bigint().unwrap());
+            dleq.c = Some(challenge_big_uint.to_bigint().unwrap());
             let response = dleq.get_r().unwrap();
             responses.insert(pubkey.clone(), response);
         } // end for pubkeys Calc r_i
@@ -203,7 +203,7 @@ impl Participant {
         // where H is an appropriate cryptographic hash function. The reconstruction protocol will yield G^s, from which we obtain σ = U ⊕ H(G^s).
         let shared_value = self.mpvss.G.modpow(
             &polynomial.get_value(&BigInt::zero()).mod_floor(
-                &(self.mpvss.q.clone().to_bigint().unwrap() - BigInt::one()),
+                &(self.mpvss.q.to_bigint().unwrap() - BigInt::one()),
             ),
             &self.mpvss.q,
         );
@@ -279,7 +279,7 @@ impl Participant {
         let mut polynomial = Polynomial::new();
         polynomial.init(
             (threshold - 1) as i32,
-            &self.mpvss.q.clone().to_bigint().unwrap(),
+            &self.mpvss.q.to_bigint().unwrap(),
         );
 
         let mut rng = rand::thread_rng();
@@ -310,7 +310,7 @@ impl Participant {
         // find modular multiplicative inverses of private key
         let privkey_inverse = Util::mod_inverse(
             private_key,
-            &(self.mpvss.q.clone() - BigInt::one()),
+            &(&self.mpvss.q - BigInt::one()),
         )
         .unwrap();
         let decrypted_share =
@@ -361,7 +361,7 @@ impl Participant {
         let challenge_hash = challenge_hasher.finalize();
         let challenge_big_uint = BigUint::from_bytes_be(&challenge_hash[..])
             .mod_floor(
-                &(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()),
+                &(self.mpvss.q.to_biguint().unwrap() - BigUint::one()),
             );
         dleq.c = Some(challenge_big_uint.to_bigint().unwrap());
 

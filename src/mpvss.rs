@@ -85,7 +85,7 @@ impl MPVSS {
             rng.gen_biguint_below(&self.q.to_biguint().unwrap());
         // We need the private key and q-1 to be coprime so that we can calculate 1/key mod (q-1) during secret reconstruction.
         while privkey
-            .gcd(&(self.q.clone().to_biguint().unwrap() - BigUint::one()))
+            .gcd(&(self.q.to_biguint().unwrap() - BigUint::one()))
             != BigUint::one()
         {
             privkey = rng.gen_biguint_below(&self.q.to_biguint().unwrap());
@@ -153,10 +153,10 @@ impl MPVSS {
         // and checks that the hash of X_i,Y_i, a_1i, a_2i,  1 ≤ i ≤ n, matches c.
         let mut dleq = DLEQ::new();
         let mut challenge_hasher = Sha256::new();
-        for publickey in distribute_sharesbox.publickeys.clone() {
-            let position = distribute_sharesbox.positions.get(&publickey);
-            let response = distribute_sharesbox.responses.get(&publickey);
-            let encrypted_share = distribute_sharesbox.shares.get(&publickey);
+        for publickey in &distribute_sharesbox.publickeys {
+            let position = distribute_sharesbox.positions.get(publickey);
+            let response = distribute_sharesbox.responses.get(publickey);
+            let encrypted_share = distribute_sharesbox.shares.get(publickey);
             if position.is_none()
                 || response.is_none()
                 || encrypted_share.is_none()
@@ -203,7 +203,7 @@ impl MPVSS {
             == BigInt::zero()
         {
             // Lagrange coefficient is an integer
-            exponent = lagrangeCoefficient.0.clone()
+            exponent = &lagrangeCoefficient.0
                 / Util::abs(&lagrangeCoefficient.1);
         } else {
             // Lagrange coefficient is a proper fraction
@@ -215,7 +215,7 @@ impl MPVSS {
             numerator /= &gcd;
             denominator /= &gcd;
 
-            let q1 = self.q.clone() - BigInt::one();
+            let q1 = &self.q - BigInt::one();
             let inverseDenominator = Util::mod_inverse(
                 &denominator.to_bigint().unwrap(),
                 &q1.to_bigint().unwrap(),
@@ -282,7 +282,7 @@ impl MPVSS {
 
         secret = factors
             .into_iter()
-            .fold(secret, |acc, factor| (acc * factor) % self.q.clone());
+            .fold(secret, |acc, factor| (acc * factor) % &self.q);
 
         // Reconstruct the secret = H(G^s) xor U
         let secret_hash = sha2::Sha256::digest(
@@ -291,7 +291,7 @@ impl MPVSS {
         let hash_big_uint = BigUint::from_bytes_be(&secret_hash[..])
             .mod_floor(&self.q.to_biguint().unwrap());
         let decrypted_secret = hash_big_uint
-            ^ distribute_share_box.U.clone().to_biguint().unwrap();
+            ^ distribute_share_box.U.to_biguint().unwrap();
         Some(decrypted_secret.to_bigint().unwrap())
     }
 }
