@@ -169,9 +169,7 @@ impl Participant {
         // the common challenge c
         let challenge_hash = challenge_hasher.finalize();
         let challenge_big_uint = BigUint::from_bytes_be(&challenge_hash[..])
-            .mod_floor(
-                &(self.mpvss.q.to_biguint().unwrap() - BigUint::one()),
-            );
+            .mod_floor(&(self.mpvss.q.to_biguint().unwrap() - BigUint::one()));
 
         // Calc response r_i
         let mut responses: BTreeMap<BigInt, BigInt> = BTreeMap::new();
@@ -277,10 +275,8 @@ impl Participant {
         threshold: u32,
     ) -> DistributionSharesBox {
         let mut polynomial = Polynomial::new();
-        polynomial.init(
-            (threshold - 1) as i32,
-            &self.mpvss.q.to_bigint().unwrap(),
-        );
+        polynomial
+            .init((threshold - 1) as i32, &self.mpvss.q.to_bigint().unwrap());
 
         let mut rng = rand::thread_rng();
         let w: BigUint =
@@ -308,11 +304,9 @@ impl Participant {
         // Using its private key x_i, each participant finds the decrypted share S_i = G^p(i) from Y_i by computing S_i = Y_i^(1/x_i).
         // Y_i is encrypted share: Y_i = y_i^p(i)
         // find modular multiplicative inverses of private key
-        let privkey_inverse = Util::mod_inverse(
-            private_key,
-            &(&self.mpvss.q - BigInt::one()),
-        )
-        .unwrap();
+        let privkey_inverse =
+            Util::mod_inverse(private_key, &(&self.mpvss.q - BigInt::one()))
+                .unwrap();
         let decrypted_share =
             encrypted_secret_share.modpow(&privkey_inverse, &self.mpvss.q);
 
@@ -360,9 +354,7 @@ impl Participant {
         // the challenge c
         let challenge_hash = challenge_hasher.finalize();
         let challenge_big_uint = BigUint::from_bytes_be(&challenge_hash[..])
-            .mod_floor(
-                &(self.mpvss.q.to_biguint().unwrap() - BigUint::one()),
-            );
+            .mod_floor(&(self.mpvss.q.to_biguint().unwrap() - BigUint::one()));
         dleq.c = Some(challenge_big_uint.to_bigint().unwrap());
 
         let mut share_box = ShareBox::new();

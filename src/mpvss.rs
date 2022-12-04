@@ -84,8 +84,7 @@ impl MPVSS {
         let mut privkey: BigUint =
             rng.gen_biguint_below(&self.q.to_biguint().unwrap());
         // We need the private key and q-1 to be coprime so that we can calculate 1/key mod (q-1) during secret reconstruction.
-        while privkey
-            .gcd(&(self.q.to_biguint().unwrap() - BigUint::one()))
+        while privkey.gcd(&(self.q.to_biguint().unwrap() - BigUint::one()))
             != BigUint::one()
         {
             privkey = rng.gen_biguint_below(&self.q.to_biguint().unwrap());
@@ -171,8 +170,7 @@ impl MPVSS {
                 x = (x * distribute_sharesbox.commitments[j]
                     .modpow(&exponent, &self.q))
                     % &self.q;
-                exponent = (exponent
-                    * BigInt::from(*position.unwrap() as i64))
+                exponent = (exponent * BigInt::from(*position.unwrap() as i64))
                     % &(self.q.clone() - BigInt::one());
             }
 
@@ -199,12 +197,10 @@ impl MPVSS {
     ) -> BigInt {
         let mut exponent = BigInt::one();
         let lagrangeCoefficient = Util::lagrange_coefficient(&position, values);
-        if &lagrangeCoefficient.0 % &lagrangeCoefficient.1
-            == BigInt::zero()
-        {
+        if &lagrangeCoefficient.0 % &lagrangeCoefficient.1 == BigInt::zero() {
             // Lagrange coefficient is an integer
-            exponent = &lagrangeCoefficient.0
-                / Util::abs(&lagrangeCoefficient.1);
+            exponent =
+                &lagrangeCoefficient.0 / Util::abs(&lagrangeCoefficient.1);
         } else {
             // Lagrange coefficient is a proper fraction
             // Cancel fraction if possible
@@ -221,9 +217,8 @@ impl MPVSS {
                 &q1.to_bigint().unwrap(),
             );
             if let Some(inverseDenom) = inverseDenominator {
-                exponent = (numerator.to_bigint().unwrap()
-                * inverseDenom)
-                % q1.to_bigint().unwrap();
+                exponent = (numerator.to_bigint().unwrap() * inverseDenom)
+                    % q1.to_bigint().unwrap();
             } else {
                 eprintln!("ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed.");
             }
@@ -290,8 +285,8 @@ impl MPVSS {
         );
         let hash_big_uint = BigUint::from_bytes_be(&secret_hash[..])
             .mod_floor(&self.q.to_biguint().unwrap());
-        let decrypted_secret = hash_big_uint
-            ^ distribute_share_box.U.to_biguint().unwrap();
+        let decrypted_secret =
+            hash_big_uint ^ distribute_share_box.U.to_biguint().unwrap();
         Some(decrypted_secret.to_bigint().unwrap())
     }
 }

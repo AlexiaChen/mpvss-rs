@@ -35,8 +35,7 @@ impl Util {
         if g != BigInt::one() {
             None
         } else {
-            let result = (&x % modular + modular)
-                % modular;
+            let result = (&x % modular + modular) % modular;
             Some(result)
         }
     }

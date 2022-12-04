@@ -33,7 +33,7 @@ impl Prover {
                 );
                 Some(result)
             }
-        }   
+        }
     }
 }
 
