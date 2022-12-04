@@ -22,7 +22,8 @@ impl Prover {
         c: &Option<BigInt>,
         q: &BigInt,
     ) -> Option<BigInt> {
-        let response_r = match c {
+        // response r
+        match c {
             None => None,
             Some(c) => {
                 let r: BigInt =
@@ -32,8 +33,7 @@ impl Prover {
                 );
                 Some(result)
             }
-        };
-        response_r
+        }   
     }
 }
 
@@ -51,6 +51,7 @@ impl Verifier {
         challenge_big_uint == (*c).to_biguint().unwrap()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn update(
         g1: &BigInt,
         h1: &BigInt,
@@ -86,6 +87,7 @@ impl Verifier {
 /// - The verifier sends a random challenge c ∈ R Zq to the prover.
 /// - The prover responds with r = w − αc (mod q).
 /// - The verifier checks that a1 = (g1^r) * (h1^c) and a2 = (g2^r) * (h2^c).
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Default)]
 pub struct DLEQ {
     pub g1: BigInt,
@@ -105,7 +107,7 @@ pub struct DLEQ {
 impl DLEQ {
     /// new DLEQ instance
     pub fn new() -> Self {
-        return DLEQ {
+        DLEQ {
             g1: BigInt::zero(),
             h1: BigInt::zero(),
             g2: BigInt::zero(),
@@ -118,8 +120,10 @@ impl DLEQ {
             a2: BigInt::zero(),
             c: None,
             r: None,
-        };
+        }
     }
+
+    #[allow(clippy::too_many_arguments)]
     #[allow(dead_code)]
     pub fn init(
         &mut self,
@@ -136,6 +140,7 @@ impl DLEQ {
         self.init2(g1, h1, g2, h2, q, alpha, w.to_bigint().unwrap());
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn init2(
         &mut self,
         g1: BigInt,

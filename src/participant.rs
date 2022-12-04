@@ -38,11 +38,11 @@ impl Participant {
     /// let mut dealer = Participant::new();
     /// ```
     pub fn new() -> Self {
-        return Participant {
+        Participant {
             mpvss: MPVSS::new(),
             privatekey: BigInt::zero(),
             publickey: BigInt::zero(),
-        };
+        }
     }
     /// Initializes a new participant with the default MPVSS.
     ///
@@ -177,10 +177,10 @@ impl Participant {
         let mut responses: BTreeMap<BigInt, BigInt> = BTreeMap::new();
         for pubkey in publickeys {
             // DLEQ(g1,h2,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,encrypted_secret_share_from_pubkey)
-            let x_i = X.get(&pubkey).unwrap();
-            let encrypted_secret_share = shares.get(&pubkey).unwrap();
-            let secret_share = sampling_points.get(&pubkey).unwrap();
-            let w = dleq_w.get(&pubkey).unwrap();
+            let x_i = X.get(pubkey).unwrap();
+            let encrypted_secret_share = shares.get(pubkey).unwrap();
+            let secret_share = sampling_points.get(pubkey).unwrap();
+            let w = dleq_w.get(pubkey).unwrap();
             let mut dleq = DLEQ::new();
             dleq.init2(
                 self.mpvss.g.clone(),
@@ -208,7 +208,7 @@ impl Participant {
             &self.mpvss.q,
         );
         let sha256_hash = sha2::Sha256::digest(
-            &shared_value
+            shared_value
                 .to_biguint()
                 .unwrap()
                 .to_str_radix(10)
@@ -287,7 +287,7 @@ impl Participant {
             rng.gen_biguint_below(&self.mpvss.q.to_biguint().unwrap());
         self.distribute(
             secret,
-            &publickeys,
+            publickeys,
             threshold,
             &polynomial,
             &w.to_bigint().unwrap(),
@@ -300,7 +300,7 @@ impl Participant {
         private_key: &BigInt,
         w: &BigInt,
     ) -> Option<ShareBox> {
-        let public_key = self.mpvss.generate_public_key(&private_key);
+        let public_key = self.mpvss.generate_public_key(private_key);
         let encrypted_secret_share =
             shares_box.shares.get(&public_key).unwrap();
 
@@ -309,7 +309,7 @@ impl Participant {
         // Y_i is encrypted share: Y_i = y_i^p(i)
         // find modular multiplicative inverses of private key
         let privkey_inverse = Util::mod_inverse(
-            &private_key,
+            private_key,
             &(self.mpvss.q.clone() - BigInt::one()),
         )
         .unwrap();
@@ -363,13 +363,13 @@ impl Participant {
             .mod_floor(
                 &(self.mpvss.q.clone().to_biguint().unwrap() - BigUint::one()),
             );
-        dleq.c = Some(challenge_big_uint.clone().to_bigint().unwrap());
+        dleq.c = Some(challenge_big_uint.to_bigint().unwrap());
 
         let mut share_box = ShareBox::new();
         share_box.init(
             public_key,
             decrypted_share,
-            challenge_big_uint.clone().to_bigint().unwrap(),
+            challenge_big_uint.to_bigint().unwrap(),
             dleq.get_r().unwrap(),
         );
         Some(share_box)

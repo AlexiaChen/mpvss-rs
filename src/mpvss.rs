@@ -40,6 +40,7 @@ use std::collections::BTreeMap;
 ///
 /// The generator is: 2.
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Default)]
 pub struct MPVSS {
     pub q: BigInt,
@@ -56,12 +57,12 @@ impl MPVSS {
     pub fn new() -> Self {
         let q: BigUint = BigUint::parse_bytes(b"ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece45b3dc2007cb8a163bf0598da48361c55d39a69163fa8fd24cf5f83655d23dca3ad961c62f356208552bb9ed529077096966d670c354e4abc9804f1746c08ca18217c32905e462e36ce3be39e772c180e86039b2783a2ec07a28fb5c55df06f4c52c9de2bcbf6955817183995497cea956ae515d2261898fa051015728e5a8aacaa68ffffffffffffffff", 16).unwrap();
         let g: BigUint = (q.clone() - BigUint::one()) / BigUint::from(2_u64);
-        return MPVSS {
+        MPVSS {
             q: q.to_bigint().unwrap(),
             g: g.to_bigint().unwrap(),
             G: BigInt::from(2_i64),
             length: 2048,
-        };
+        }
     }
 
     /// Initializes a MPVSS by generating a safe prime of `length` bit length.
@@ -70,12 +71,12 @@ impl MPVSS {
     pub fn init(length: u32) -> Self {
         let q: BigUint = Generator::safe_prime(length as usize);
         let g: BigUint = (q.clone() - BigUint::one()) / BigUint::from(2_u64);
-        return MPVSS {
+        MPVSS {
             q: q.to_bigint().unwrap(),
             g: g.to_bigint().unwrap(),
             G: BigInt::from(2_i64),
-            length: length,
-        };
+            length,
+        }
     }
 
     pub fn generate_private_key(&self) -> BigInt {
@@ -171,7 +172,7 @@ impl MPVSS {
                     .modpow(&exponent, &self.q))
                     % &self.q;
                 exponent = (exponent
-                    * BigInt::from(position.unwrap().clone() as i64))
+                    * BigInt::from(*position.unwrap() as i64))
                     % &(self.q.clone() - BigInt::one());
             }
 
@@ -198,7 +199,7 @@ impl MPVSS {
     ) -> BigInt {
         let mut exponent = BigInt::one();
         let lagrangeCoefficient = Util::lagrange_coefficient(&position, values);
-        if lagrangeCoefficient.0.clone() % lagrangeCoefficient.1.clone()
+        if &lagrangeCoefficient.0 % &lagrangeCoefficient.1
             == BigInt::zero()
         {
             // Lagrange coefficient is an integer
@@ -211,18 +212,18 @@ impl MPVSS {
             let mut denominator =
                 Util::abs(&lagrangeCoefficient.1).to_biguint().unwrap();
             let gcd = numerator.gcd(&denominator);
-            numerator = numerator / gcd.clone();
-            denominator = denominator / gcd.clone();
+            numerator /= &gcd;
+            denominator /= &gcd;
 
             let q1 = self.q.clone() - BigInt::one();
             let inverseDenominator = Util::mod_inverse(
                 &denominator.to_bigint().unwrap(),
                 &q1.to_bigint().unwrap(),
             );
-            if inverseDenominator.is_some() {
+            if let Some(inverseDenom) = inverseDenominator {
                 exponent = (numerator.to_bigint().unwrap()
-                    * inverseDenominator.unwrap())
-                    % q1.clone().to_bigint().unwrap();
+                * inverseDenom)
+                % q1.to_bigint().unwrap();
             } else {
                 eprintln!("ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed.");
             }
@@ -235,8 +236,8 @@ impl MPVSS {
             // Lagrange coefficient was negative. S^(-lambda) = 1/(S^lambda)
             let inverseFactor =
                 Util::mod_inverse(&factor, &self.q.to_bigint().unwrap());
-            if inverseFactor.is_some() {
-                factor = inverseFactor.unwrap();
+            if let Some(inversefactor) = inverseFactor {
+                factor = inversefactor;
             } else {
                 eprintln!("ERROR: Lagrange coefficient was negative and does not have an inverse. Share cannot be processed.")
             }
@@ -258,9 +259,7 @@ impl MPVSS {
         for share_box in share_boxs.iter() {
             let position =
                 distribute_share_box.positions.get(&share_box.publickey);
-            if position.is_none() {
-                return None;
-            }
+            position?;
             shares.insert(*position.unwrap(), share_box.share.clone());
         }
         // Pooling  the shares. Suppose
@@ -268,7 +267,7 @@ impl MPVSS {
         // The secret G^s is obtained by Lagrange interpolation:
         // ∏(i=1->t)(S^λ_i) = ∏(i=1->t)(G^p(i))^λ_i = G^(∑(i=1->t)p(i)*λ_i = G^p(0) = G^s,
         let mut secret: BigInt = BigInt::one();
-        let values: Vec<i64> = shares.keys().map(|key| *key).collect();
+        let values: Vec<i64> = shares.keys().copied().collect();
         let shares_vec: Vec<(i64, BigInt)> = shares
             .into_iter()
             .map(|(postion, share)| (postion, share))
@@ -287,7 +286,7 @@ impl MPVSS {
 
         // Reconstruct the secret = H(G^s) xor U
         let secret_hash = sha2::Sha256::digest(
-            &secret.to_biguint().unwrap().to_str_radix(10).as_bytes(),
+            secret.to_biguint().unwrap().to_str_radix(10).as_bytes(),
         );
         let hash_big_uint = BigUint::from_bytes_be(&secret_hash[..])
             .mod_floor(&self.q.to_biguint().unwrap());

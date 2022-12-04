@@ -22,9 +22,9 @@ pub struct Polynomial {
 impl Polynomial {
     /// Create empty Polynomial instance
     pub fn new() -> Self {
-        return Polynomial {
+        Polynomial {
             coefficients: Vec::new(),
-        };
+        }
     }
 
     pub fn init_coefficients(&mut self, coefficients: &[BigInt]) {
@@ -52,7 +52,7 @@ impl Polynomial {
         let mut result = self.coefficients[0].clone();
         // a0+ a_1*x^1 + a_2*x^2 + ... + a_n*x^n
         for i in 1..self.coefficients.len() {
-            result = result + self.coefficients[i].clone().mul(x.pow(i));
+            result += self.coefficients[i].clone().mul(x.pow(i));
         }
         result
     }
