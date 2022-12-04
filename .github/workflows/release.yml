@@ -1,8 +1,7 @@
 name: Release
 on:
   push:
-    branches:
-      - release
+    branches: [release]
     paths:
       - '**/Cargo.toml'
       - '.github/workflows/release.yml'

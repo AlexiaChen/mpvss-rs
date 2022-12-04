@@ -1,3 +1,10 @@
+# Version 0.2.7
+
+## Improvements
+
+- Remove useless clone()
+- Fix warnings for clippy
+
 # Version 0.2.5
 
 ## Fixs

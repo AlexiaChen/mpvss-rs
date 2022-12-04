@@ -15,12 +15,12 @@ impl Util {
     ///
     /// This function is an implementation of the [extended Euclidean
     /// algorithm](https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm).
-    pub fn extend_gcd(a: BigInt, b: BigInt) -> (BigInt, BigInt, BigInt) {
-        if a == BigInt::zero() {
+    pub fn extend_gcd(a: &BigInt, b: &BigInt) -> (BigInt, BigInt, BigInt) {
+        if a == &BigInt::zero() {
             (b.clone(), BigInt::zero(), BigInt::one())
         } else {
-            let (g, x, y) = Util::extend_gcd(b.clone() % a.clone(), a.clone());
-            (g, y - (b.clone() / a.clone()) * x.clone(), x.clone())
+            let (g, x, y) = Util::extend_gcd(&(b % a), a);
+            (g, y - (b / a) * &x, x)
         }
     }
 
@@ -31,12 +31,11 @@ impl Util {
     /// Such an integer may not exist. If so, this function will return `None`.
     /// Otherwise, the inverse will be returned wrapped up in a `Some`.
     pub fn mod_inverse(a: &BigInt, modular: &BigInt) -> Option<BigInt> {
-        let (g, x, _) = Util::extend_gcd(a.clone(), modular.clone());
+        let (g, x, _) = Util::extend_gcd(a, modular);
         if g != BigInt::one() {
             None
         } else {
-            let result = (x.clone() % modular.clone() + modular.clone())
-                % modular.clone();
+            let result = (&x % modular + modular) % modular;
             Some(result)
         }
     }
@@ -57,11 +56,11 @@ impl Util {
         let max = vec_to.iter().max().unwrap();
         for j in 1..=*max {
             if j != *i && values.contains(&j) {
-                numerator = numerator * j;
-                denominator = denominator * (j - *i);
+                numerator *= j;
+                denominator *= j - *i;
             }
         }
-        return (numerator, denominator);
+        (numerator, denominator)
     }
 
     /// return abs value
@@ -85,7 +84,7 @@ mod tests {
     fn test_extend_gcd() {
         let a = BigInt::from(26);
         let b = BigInt::from(3);
-        let (g, x, y) = Util::extend_gcd(a.clone(), b.clone());
+        let (g, x, y) = Util::extend_gcd(&a, &b);
 
         assert_eq!(g, BigInt::one());
         assert_eq!(x, BigInt::from(-1));

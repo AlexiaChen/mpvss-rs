@@ -19,12 +19,12 @@ pub struct ShareBox {
 
 impl ShareBox {
     pub fn new() -> Self {
-        return ShareBox {
+        ShareBox {
             publickey: BigInt::zero(),
             share: BigInt::zero(),
             challenge: BigInt::zero(),
             response: BigInt::zero(),
-        };
+        }
     }
 
     pub fn init(
@@ -56,7 +56,7 @@ pub struct DistributionSharesBox {
 
 impl DistributionSharesBox {
     pub fn new() -> Self {
-        return DistributionSharesBox {
+        DistributionSharesBox {
             commitments: Vec::new(),
             positions: BTreeMap::new(),
             shares: BTreeMap::new(),
@@ -64,9 +64,10 @@ impl DistributionSharesBox {
             challenge: BigInt::zero(),
             responses: BTreeMap::new(),
             U: BigInt::zero(),
-        };
+        }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn init(
         &mut self,
         commitments: &[BigInt],
