@@ -121,7 +121,7 @@ impl Participant {
                 pubkey.modpow(&secret_share, &self.mpvss.q);
             shares.insert(pubkey.clone(), encrypted_secret_share.clone());
 
-            // DLEQ(g1,h2,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,enrypted_secret_share_from_pubkey)
+            // DLEQ(g1,h1,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,enrypted_secret_share_from_pubkey)
             // Prove That  g^alpha = commintment_with_secret_share and pubkey^alpha = encrypted_secret_share_from_pubkey has same alpha value
             let mut dleq = DLEQ::new();
             dleq.init2(
