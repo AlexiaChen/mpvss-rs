@@ -54,6 +54,14 @@ p2.initialize();
 p3.initialize();
 ```
 
+To generate Ed25519 key pairs, you can use the `generate_ed25519_keypair` function:
+
+```rust
+use ed25519_dalek::{Keypair, PublicKey, SecretKey, Signature, Signer};
+
+let (secret_key, public_key) = generate_ed25519_keypair();
+```
+
 #### Distribution & Verification
 
 The dealer splits the secret into shares, encrypts them and creates a proof so that everybody can verify that the shares (once decrypted) can be used to reconstruct the secret. The threshold determines how many shares are necessary for the reconstruction. The encrypted shares and the proof are then bundled together.
@@ -142,6 +150,8 @@ assert_eq!(secret_message.clone(), r3_str);
 ## In the futures
 
 Add more Elliptic Curves groups.
+
+Note: Ed25519 key generation is now supported.
 
 ## Related References:
 

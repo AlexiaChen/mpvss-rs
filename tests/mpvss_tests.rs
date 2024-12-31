@@ -1,7 +1,4 @@
-// Copyright 2020-2021  MathxH Chen.
-//
-// Code is licensed under GPLv3.0 License.
-
+use ed25519_dalek::{Keypair, PublicKey, SecretKey, Signature, Signer};
 use mpvss_rs::Participant;
 use mpvss_rs::{string_from_secret, string_to_secret};
 
@@ -75,4 +72,11 @@ fn test_mpvss_distribute_verify_reconstruct() {
     assert_eq!(secret_message.clone(), r2_str);
     let r3_str = string_from_secret(&r3);
     assert_eq!(secret_message.clone(), r3_str);
+}
+
+#[test]
+fn test_ed25519_key_generation() {
+    let (secret_key, public_key) = generate_ed25519_keypair();
+    assert!(secret_key.as_bytes().len() == 32);
+    assert!(public_key.as_bytes().len() == 32);
 }
