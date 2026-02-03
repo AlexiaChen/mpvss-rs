@@ -25,6 +25,7 @@ use crate::group::Group;
 ///
 /// The prime is: 2^2048 - 2^1984 - 1 + 2^64 * { [2^1918 pi] + 124476 }
 #[derive(Debug, Clone)]
+#[allow(non_snake_case)]
 pub struct ModpGroup {
     /// Safe prime (group modulus)
     q: BigInt,

@@ -8,7 +8,7 @@
 //! implementation (MODP, secp256k1, etc.), enabling the PVSS scheme to use different
 //! cryptographic backends.
 
-use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt};
+use num_bigint::{BigInt, BigUint, ToBigInt};
 use num_integer::Integer;
 use num_traits::identities::{One, Zero};
 use sha2::{Digest, Sha256};
@@ -580,6 +580,76 @@ impl GenericParticipant<ModpGroup> {
         challenge_computed == sharebox.challenge
     }
 
+    /// Verify distribution shares box (ModpGroup implementation).
+    ///
+    /// Verifies that all encrypted shares are consistent with the commitments.
+    /// This is the public verifiability part of PVSS - anyone can verify the dealer
+    /// didn't cheat.
+    ///
+    /// # Parameters
+    /// - `distribute_sharesbox`: The distribution shares box to verify
+    ///
+    /// # Returns
+    /// `true` if the distribution is valid, `false` otherwise
+    pub fn verify_distribution_shares_modp(
+        &self,
+        distribute_sharesbox: &DistributionSharesBox<ModpGroup>,
+    ) -> bool {
+        let subgroup_gen = self.group.subgroup_generator();
+        let group_order = self.group.order();
+        let mut challenge_hasher = Sha256::new();
+
+        // Verify each participant's encrypted share and accumulate hash
+        for publickey in &distribute_sharesbox.publickeys {
+            let position = distribute_sharesbox.positions.get(publickey);
+            let response = distribute_sharesbox.responses.get(publickey);
+            let encrypted_share = distribute_sharesbox.shares.get(publickey);
+
+            if position.is_none() || response.is_none() || encrypted_share.is_none() {
+                return false;
+            }
+
+            // Calculate X_i = ∏_{j=0}^{t-1} C_j^{i^j} using group operations
+            let mut x_val = self.group.identity();
+            let mut exponent = BigInt::one();
+            for j in 0..distribute_sharesbox.commitments.len() {
+                let c_j_pow =
+                    self.group.exp(&distribute_sharesbox.commitments[j], &exponent);
+                x_val = self.group.mul(&x_val, &c_j_pow);
+                exponent = self.group.scalar_mul(&exponent, &BigInt::from(*position.unwrap()))
+                    % group_order;
+            }
+
+            // Verify DLEQ proof for this participant
+            // DLEQ(g, X_i, y_i, Y_i): proves log_g(X_i) = log_{y_i}(Y_i)
+            // a_1 = g^r * X_i^c, a_2 = y_i^r * Y_i^c
+            let g_r = self.group.exp(&subgroup_gen, response.unwrap());
+            let x_c = self.group.exp(&x_val, &distribute_sharesbox.challenge);
+            let a1 = self.group.mul(&g_r, &x_c);
+
+            let y_r = self.group.exp(publickey, response.unwrap());
+            let y_c = self.group.exp(
+                encrypted_share.unwrap(),
+                &distribute_sharesbox.challenge,
+            );
+            let a2 = self.group.mul(&y_r, &y_c);
+
+            // Update hash with X_i, Y_i, a_1, a_2
+            challenge_hasher.update(x_val.to_biguint().unwrap().to_str_radix(10).as_bytes());
+            challenge_hasher.update(
+                encrypted_share.unwrap().to_biguint().unwrap().to_str_radix(10).as_bytes(),
+            );
+            challenge_hasher.update(a1.to_biguint().unwrap().to_str_radix(10).as_bytes());
+            challenge_hasher.update(a2.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        }
+
+        // Calculate final challenge and check if it matches c
+        let challenge_hash = challenge_hasher.finalize();
+        let computed_challenge = self.group.hash_to_scalar(&challenge_hash);
+
+        computed_challenge == distribute_sharesbox.challenge
+    }
+
     /// Reconstruct secret from shares (ModpGroup implementation).
     ///
     /// # Parameters
@@ -692,12 +762,10 @@ impl GenericParticipant<ModpGroup> {
         let mut factor = self.group.exp(share, &exponent);
 
         // Handle negative Lagrange coefficient using element_inverse
-        if lagrange_coefficient.0.clone() * lagrange_coefficient.1
-            < BigInt::zero()
+        if lagrange_coefficient.0.clone() * lagrange_coefficient.1 < BigInt::zero()
+            && let Some(inverse_factor) = self.group.element_inverse(&factor)
         {
-            if let Some(inverse_factor) = self.group.element_inverse(&factor) {
-                factor = inverse_factor;
-            }
+            factor = inverse_factor;
         }
 
         factor
@@ -713,6 +781,7 @@ mod tests {
     use super::*;
     use crate::groups::ModpGroup;
     use crate::participant::Participant;
+    use num_bigint::RandBigInt;
 
     #[test]
     fn test_generic_modp_participant_new() {
@@ -910,7 +979,16 @@ mod tests {
             threshold,
         );
 
-        // Verify distribution box is valid
+        // ===== Step 1: Verify distribution =====
+        // Each participant should verify the distribution is valid
+        let verified_by_p1 = dealer.verify_distribution_shares_modp(&dist_box);
+        let verified_by_p2 = dealer.verify_distribution_shares_modp(&dist_box);
+        let verified_by_p3 = dealer.verify_distribution_shares_modp(&dist_box);
+        assert!(verified_by_p1, "P1 should verify distribution as valid");
+        assert!(verified_by_p2, "P2 should verify distribution as valid");
+        assert!(verified_by_p3, "P3 should verify distribution as valid");
+
+        // Verify distribution box structure
         assert_eq!(dist_box.publickeys.len(), 3, "Should have 3 public keys");
         assert_eq!(dist_box.commitments.len(), 3, "Should have 3 commitments");
         assert_eq!(dist_box.shares.len(), 3, "Should have 3 shares");
@@ -923,7 +1001,7 @@ mod tests {
             .to_bigint()
             .unwrap();
 
-        // Extract shares
+        // ===== Step 2: Extract shares =====
         let s1 = p1
             .extract_secret_share_modp(&dist_box, &p1.privatekey, &w)
             .unwrap();
@@ -934,7 +1012,7 @@ mod tests {
             .extract_secret_share_modp(&dist_box, &p3.privatekey, &w)
             .unwrap();
 
-        // Verify extracted shares
+        // Verify extracted shares structure
         assert_eq!(s1.publickey, p1.publickey, "P1 publickey should match");
         assert_ne!(s1.share, BigInt::zero(), "P1 share should not be zero");
 
@@ -944,7 +1022,24 @@ mod tests {
         assert_eq!(s3.publickey, p3.publickey, "P3 publickey should match");
         assert_ne!(s3.share, BigInt::zero(), "P3 share should not be zero");
 
-        // Reconstruct secret
+        // ===== Step 3: Verify each extracted share =====
+        // Each participant can verify other participants' shares
+        let p1_verifies_s2 = dealer.verify_share_modp(&s2, &dist_box, &p2.publickey);
+        let p1_verifies_s3 = dealer.verify_share_modp(&s3, &dist_box, &p3.publickey);
+        assert!(p1_verifies_s2, "P1 should verify P2's share as valid");
+        assert!(p1_verifies_s3, "P1 should verify P3's share as valid");
+
+        let p2_verifies_s1 = dealer.verify_share_modp(&s1, &dist_box, &p1.publickey);
+        let p2_verifies_s3 = dealer.verify_share_modp(&s3, &dist_box, &p3.publickey);
+        assert!(p2_verifies_s1, "P2 should verify P1's share as valid");
+        assert!(p2_verifies_s3, "P2 should verify P3's share as valid");
+
+        let p3_verifies_s1 = dealer.verify_share_modp(&s1, &dist_box, &p1.publickey);
+        let p3_verifies_s2 = dealer.verify_share_modp(&s2, &dist_box, &p2.publickey);
+        assert!(p3_verifies_s1, "P3 should verify P1's share as valid");
+        assert!(p3_verifies_s2, "P3 should verify P2's share as valid");
+
+        // ===== Step 4: Reconstruct secret from verified shares =====
         let shares = vec![s1, s2, s3];
         let reconstructed =
             dealer.reconstruct_modp(&shares, &dist_box).unwrap();
