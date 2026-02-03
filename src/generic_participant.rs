@@ -605,7 +605,10 @@ impl GenericParticipant<ModpGroup> {
             let response = distribute_sharesbox.responses.get(publickey);
             let encrypted_share = distribute_sharesbox.shares.get(publickey);
 
-            if position.is_none() || response.is_none() || encrypted_share.is_none() {
+            if position.is_none()
+                || response.is_none()
+                || encrypted_share.is_none()
+            {
                 return false;
             }
 
@@ -613,10 +616,13 @@ impl GenericParticipant<ModpGroup> {
             let mut x_val = self.group.identity();
             let mut exponent = BigInt::one();
             for j in 0..distribute_sharesbox.commitments.len() {
-                let c_j_pow =
-                    self.group.exp(&distribute_sharesbox.commitments[j], &exponent);
+                let c_j_pow = self
+                    .group
+                    .exp(&distribute_sharesbox.commitments[j], &exponent);
                 x_val = self.group.mul(&x_val, &c_j_pow);
-                exponent = self.group.scalar_mul(&exponent, &BigInt::from(*position.unwrap()))
+                exponent = self
+                    .group
+                    .scalar_mul(&exponent, &BigInt::from(*position.unwrap()))
                     % group_order;
             }
 
@@ -628,19 +634,27 @@ impl GenericParticipant<ModpGroup> {
             let a1 = self.group.mul(&g_r, &x_c);
 
             let y_r = self.group.exp(publickey, response.unwrap());
-            let y_c = self.group.exp(
-                encrypted_share.unwrap(),
-                &distribute_sharesbox.challenge,
-            );
+            let y_c = self
+                .group
+                .exp(encrypted_share.unwrap(), &distribute_sharesbox.challenge);
             let a2 = self.group.mul(&y_r, &y_c);
 
             // Update hash with X_i, Y_i, a_1, a_2
-            challenge_hasher.update(x_val.to_biguint().unwrap().to_str_radix(10).as_bytes());
             challenge_hasher.update(
-                encrypted_share.unwrap().to_biguint().unwrap().to_str_radix(10).as_bytes(),
+                x_val.to_biguint().unwrap().to_str_radix(10).as_bytes(),
             );
-            challenge_hasher.update(a1.to_biguint().unwrap().to_str_radix(10).as_bytes());
-            challenge_hasher.update(a2.to_biguint().unwrap().to_str_radix(10).as_bytes());
+            challenge_hasher.update(
+                encrypted_share
+                    .unwrap()
+                    .to_biguint()
+                    .unwrap()
+                    .to_str_radix(10)
+                    .as_bytes(),
+            );
+            challenge_hasher
+                .update(a1.to_biguint().unwrap().to_str_radix(10).as_bytes());
+            challenge_hasher
+                .update(a2.to_biguint().unwrap().to_str_radix(10).as_bytes());
         }
 
         // Calculate final challenge and check if it matches c
@@ -762,7 +776,8 @@ impl GenericParticipant<ModpGroup> {
         let mut factor = self.group.exp(share, &exponent);
 
         // Handle negative Lagrange coefficient using element_inverse
-        if lagrange_coefficient.0.clone() * lagrange_coefficient.1 < BigInt::zero()
+        if lagrange_coefficient.0.clone() * lagrange_coefficient.1
+            < BigInt::zero()
             && let Some(inverse_factor) = self.group.element_inverse(&factor)
         {
             factor = inverse_factor;
@@ -1024,18 +1039,24 @@ mod tests {
 
         // ===== Step 3: Verify each extracted share =====
         // Each participant can verify other participants' shares
-        let p1_verifies_s2 = dealer.verify_share_modp(&s2, &dist_box, &p2.publickey);
-        let p1_verifies_s3 = dealer.verify_share_modp(&s3, &dist_box, &p3.publickey);
+        let p1_verifies_s2 =
+            dealer.verify_share_modp(&s2, &dist_box, &p2.publickey);
+        let p1_verifies_s3 =
+            dealer.verify_share_modp(&s3, &dist_box, &p3.publickey);
         assert!(p1_verifies_s2, "P1 should verify P2's share as valid");
         assert!(p1_verifies_s3, "P1 should verify P3's share as valid");
 
-        let p2_verifies_s1 = dealer.verify_share_modp(&s1, &dist_box, &p1.publickey);
-        let p2_verifies_s3 = dealer.verify_share_modp(&s3, &dist_box, &p3.publickey);
+        let p2_verifies_s1 =
+            dealer.verify_share_modp(&s1, &dist_box, &p1.publickey);
+        let p2_verifies_s3 =
+            dealer.verify_share_modp(&s3, &dist_box, &p3.publickey);
         assert!(p2_verifies_s1, "P2 should verify P1's share as valid");
         assert!(p2_verifies_s3, "P2 should verify P3's share as valid");
 
-        let p3_verifies_s1 = dealer.verify_share_modp(&s1, &dist_box, &p1.publickey);
-        let p3_verifies_s2 = dealer.verify_share_modp(&s2, &dist_box, &p2.publickey);
+        let p3_verifies_s1 =
+            dealer.verify_share_modp(&s1, &dist_box, &p1.publickey);
+        let p3_verifies_s2 =
+            dealer.verify_share_modp(&s2, &dist_box, &p2.publickey);
         assert!(p3_verifies_s1, "P3 should verify P1's share as valid");
         assert!(p3_verifies_s2, "P3 should verify P2's share as valid");
 
