@@ -374,8 +374,8 @@ impl Participant {
     ///   - shares_box: The distribution shares box that consists the share to be extracted.
     ///   - private_key: The participant's private key used to decrypt the share.
     /// - Returns: The share box that is to be submitted to all the other participants in order to reconstruct the secret.
-    ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
-    ///     Return `None` if the distribution shares box does not contain a share for the participant.
+    ///   It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
+    ///   Return `None` if the distribution shares box does not contain a share for the participant.
     ///
     /// ## Example
     ///
@@ -464,7 +464,6 @@ impl Participant {
     ///     p2.verify_distribution_shares(&distribute_shares_box),
     ///     true
     /// );
-
     /// assert_eq!(
     ///     p3.verify_distribution_shares(&distribute_shares_box),
     ///     true

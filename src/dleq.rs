@@ -99,7 +99,9 @@ pub struct DLEQ {
     pub q: BigInt,
     pub alpha: BigInt,
     pub c: Option<BigInt>,
+    #[allow(dead_code)]
     pub a1: BigInt,
+    #[allow(dead_code)]
     pub a2: BigInt,
     pub r: Option<BigInt>,
 }
