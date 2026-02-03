@@ -57,6 +57,7 @@ impl Verifier {
     /// Update challenge hasher with DLEQ data
     ///
     /// Computes a1 = g1^r * h1^c and a2 = g2^r * h2^c for verification
+    #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     fn update<G: Group>(
         group: &G,

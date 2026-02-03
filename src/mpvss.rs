@@ -9,18 +9,13 @@
 
 #![allow(non_snake_case)]
 
-use num_bigint::{BigInt, BigUint, ToBigInt};
-use num_integer::Integer;
-use num_traits::identities::{One, Zero};
-use rayon::prelude::*;
+use num_bigint::BigInt;
+use num_traits::identities::One;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::dleq::DLEQ;
 use crate::group::Group;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
-use crate::util::Util;
 
 // ============================================================================
 // PVSS Structure
@@ -97,7 +92,6 @@ where
         distribute_sharesbox: &DistributionSharesBox<G>,
     ) -> bool {
         let subgroup_gen = self.group.subgroup_generator();
-        let group_order = self.group.order();
         let mut challenge_hasher = Sha256::new();
 
         // Verify each participant's encrypted share and accumulate hash
