@@ -268,7 +268,6 @@ mod tests {
     use crate::groups::ModpGroup;
     use num_bigint::{BigInt, RandBigInt, ToBigInt};
     use num_integer::Integer;
-    use num_traits::One;
 
     #[test]
     fn test_generic_dleq_new() {
@@ -312,7 +311,6 @@ mod tests {
         let h2 = BigInt::from(14767239);
         let w = BigInt::from(81647);
         let alpha = BigInt::from(163027);
-        let q = BigInt::from(15487469);
 
         dleq.init(g1, h1, g2, h2, alpha, w);
         dleq.c = Some(BigInt::from(127997));

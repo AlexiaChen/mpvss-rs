@@ -228,7 +228,6 @@ mod tests {
     use crate::groups::ModpGroup;
     use crate::participant::Participant;
     use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt};
-    use rand::Rng;
 
     #[test]
     fn test_generic_mpvss_new() {
