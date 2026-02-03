@@ -346,7 +346,7 @@ mod tests {
         let G: BigInt = BigInt::from(15486487);
 
         let length = 64_i64;
-        drop(length);
+        let _ = length;
 
         let mut mpvss = MPVSS::new();
         mpvss.q = q;
