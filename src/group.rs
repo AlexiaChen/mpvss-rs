@@ -8,6 +8,7 @@
 //! and elliptic curve groups (scalar multiplication), enabling the PVSS scheme to work
 //! with different cryptographic backends.
 
+use num_bigint::BigInt;
 use sha2::{Digest, Sha256};
 
 /// Cryptographic group abstraction for PVSS operations.
@@ -110,6 +111,16 @@ pub trait Group: Clone + Send + Sync {
     ///
     /// Used for DLEQ response computation: r = w - alpha*c
     fn scalar_sub(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar;
+
+    /// Get the group modulus (for MODP groups) or None for groups without a modulus
+    ///
+    /// - MODP: Returns the safe prime q
+    /// - EC: Returns None (no modulus concept)
+    ///
+    /// This is used for U encoding in the PVSS scheme (secret XOR H(G^s))
+    fn modulus(&self) -> Option<&BigInt> {
+        None
+    }
 }
 
 /// Helper function to compute SHA-256 hash of multiple byte sequences

@@ -183,6 +183,10 @@ impl Group for ModpGroup {
             diff % order
         }
     }
+
+    fn modulus(&self) -> Option<&BigInt> {
+        Some(&self.q)
+    }
 }
 
 #[cfg(test)]

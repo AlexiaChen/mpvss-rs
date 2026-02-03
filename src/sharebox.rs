@@ -12,89 +12,6 @@ use std::vec::Vec;
 use crate::group::Group;
 
 // ============================================================================
-// Legacy (Non-Generic) ShareBox Types for Backward Compatibility
-// ============================================================================
-
-#[derive(Debug, Clone, Default)]
-pub struct ShareBox {
-    pub publickey: BigInt,
-    pub share: BigInt,
-    pub challenge: BigInt,
-    pub response: BigInt,
-}
-
-impl ShareBox {
-    pub fn new() -> Self {
-        ShareBox {
-            publickey: BigInt::zero(),
-            share: BigInt::zero(),
-            challenge: BigInt::zero(),
-            response: BigInt::zero(),
-        }
-    }
-
-    pub fn init(
-        &mut self,
-        publickey: BigInt,
-        share: BigInt,
-        challenge: BigInt,
-        response: BigInt,
-    ) {
-        self.publickey = publickey;
-        self.share = share;
-        self.challenge = challenge;
-        self.response = response;
-    }
-}
-
-/// the  dealer  wishes to distribute a secret among participants P1,...,Pn.
-/// The dealer picks a randompolynomialp of degree at most t−1 with coefficients in Z_q
-#[derive(Debug, Clone, Default)]
-pub struct DistributionSharesBox {
-    pub commitments: Vec<BigInt>,
-    pub positions: BTreeMap<BigInt, i64>,
-    pub shares: BTreeMap<BigInt, BigInt>,
-    pub publickeys: Vec<BigInt>,
-    pub challenge: BigInt,
-    pub responses: BTreeMap<BigInt, BigInt>,
-    pub U: BigInt,
-}
-
-impl DistributionSharesBox {
-    pub fn new() -> Self {
-        DistributionSharesBox {
-            commitments: Vec::new(),
-            positions: BTreeMap::new(),
-            shares: BTreeMap::new(),
-            publickeys: Vec::new(),
-            challenge: BigInt::zero(),
-            responses: BTreeMap::new(),
-            U: BigInt::zero(),
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn init(
-        &mut self,
-        commitments: &[BigInt],
-        positions: BTreeMap<BigInt, i64>,
-        shares: BTreeMap<BigInt, BigInt>,
-        publickeys: &[BigInt],
-        challenge: &BigInt,
-        responses: BTreeMap<BigInt, BigInt>,
-        U: &BigInt,
-    ) {
-        self.commitments = commitments.to_vec();
-        self.positions = positions;
-        self.shares = shares;
-        self.publickeys = publickeys.to_vec();
-        self.challenge = challenge.clone();
-        self.responses = responses;
-        self.U = U.clone();
-    }
-}
-
-// ============================================================================
 // Generic ShareBox Types for 1.0.0 API
 // ============================================================================
 
@@ -206,3 +123,15 @@ impl<G: Group> GenericDistributionSharesBox<G> {
         self.U = U.clone();
     }
 }
+
+// ============================================================================
+// Type Aliases (Primary API)
+// ============================================================================
+
+/// Type alias for the generic ShareBox - primary API for 1.0.0
+/// Replaces the old non-generic ShareBox struct
+pub type ShareBox<G> = GenericShareBox<G>;
+
+/// Type alias for the generic DistributionSharesBox - primary API for 1.0.0
+/// Replaces the old non-generic DistributionSharesBox struct
+pub type DistributionSharesBox<G> = GenericDistributionSharesBox<G>;
