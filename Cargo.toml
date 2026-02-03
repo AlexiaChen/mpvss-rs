@@ -19,3 +19,10 @@ num-traits = "0.2"
 rand = "0.5"
 rayon = "1.11"
 sha2 = "0.10"
+
+# Elliptic curve support
+k256 = { version = "0.13", features = ["arithmetic", "expose-field"], optional = true }
+
+[features]
+default = []
+secp256k1 = ["k256"]

@@ -19,12 +19,19 @@
 //! See [Github README](https://github.com/AlexiaChen/mpvss-rs/blob/master/README.md)
 
 mod dleq;
+pub mod generic_participant;
 mod mpvss;
 mod participant;
 mod polynomial;
 mod sharebox;
 mod util;
 
+// Group abstractions (new 1.0.0 API)
+pub mod group;
+pub mod groups;
+
+// Public API exports
+pub use generic_participant::{GenericParticipant, ModpParticipant};
 pub use participant::Participant;
 pub use sharebox::{DistributionSharesBox, ShareBox};
 
