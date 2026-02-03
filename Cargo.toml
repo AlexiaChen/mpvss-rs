@@ -1,7 +1,7 @@
 [package]
 authors = ["MathxH Chen <brainfvck@foxmail.com>"]
 description = "A Simple Publicly Verifiable Secret Sharing Library"
-edition = "2021"
+edition = "2024"
 keywords = ["pvss-scheme", "secret-sharing", "threshold-crypto", "zero-knowledge-proof"]
 license = "MIT OR Apache-2.0"
 name = "mpvss-rs"

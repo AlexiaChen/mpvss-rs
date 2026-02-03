@@ -652,9 +652,9 @@ mod tests {
 
     use super::BTreeMap;
     use super::BigInt;
+    use super::MPVSS;
     use super::Participant;
     use super::Polynomial;
-    use super::MPVSS;
     use super::{DistributionSharesBox, ShareBox};
     use num_traits::{One, Zero};
 
