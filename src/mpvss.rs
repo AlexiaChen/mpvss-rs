@@ -220,7 +220,9 @@ impl MPVSS {
                 exponent = (numerator.to_bigint().unwrap() * inverseDenom)
                     % q1.to_bigint().unwrap();
             } else {
-                eprintln!("ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed.");
+                eprintln!(
+                    "ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed."
+                );
             }
         }
         let mut factor = share
@@ -234,7 +236,9 @@ impl MPVSS {
             if let Some(inversefactor) = inverseFactor {
                 factor = inversefactor;
             } else {
-                eprintln!("ERROR: Lagrange coefficient was negative and does not have an inverse. Share cannot be processed.")
+                eprintln!(
+                    "ERROR: Lagrange coefficient was negative and does not have an inverse. Share cannot be processed."
+                )
             }
         }
 
