@@ -121,7 +121,7 @@ impl Participant {
                 pubkey.modpow(&secret_share, &self.mpvss.q);
             shares.insert(pubkey.clone(), encrypted_secret_share.clone());
 
-            // DLEQ(g1,h2,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,enrypted_secret_share_from_pubkey)
+            // DLEQ(g1,h1,g2,h2) => DLEQ(g,X_i,y_i,Y_i) => DLEQ(g,commintment_with_secret_share,pubkey,enrypted_secret_share_from_pubkey)
             // Prove That  g^alpha = commintment_with_secret_share and pubkey^alpha = encrypted_secret_share_from_pubkey has same alpha value
             let mut dleq = DLEQ::new();
             dleq.init2(
@@ -374,8 +374,8 @@ impl Participant {
     ///   - shares_box: The distribution shares box that consists the share to be extracted.
     ///   - private_key: The participant's private key used to decrypt the share.
     /// - Returns: The share box that is to be submitted to all the other participants in order to reconstruct the secret.
-    ///     It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
-    ///     Return `None` if the distribution shares box does not contain a share for the participant.
+    ///   It consists of the share itself and the proof that allows the receiving participant to verify its correctness.
+    ///   Return `None` if the distribution shares box does not contain a share for the participant.
     ///
     /// ## Example
     ///
@@ -464,7 +464,6 @@ impl Participant {
     ///     p2.verify_distribution_shares(&distribute_shares_box),
     ///     true
     /// );
-
     /// assert_eq!(
     ///     p3.verify_distribution_shares(&distribute_shares_box),
     ///     true
@@ -652,9 +651,9 @@ mod tests {
 
     use super::BTreeMap;
     use super::BigInt;
+    use super::MPVSS;
     use super::Participant;
     use super::Polynomial;
-    use super::MPVSS;
     use super::{DistributionSharesBox, ShareBox};
     use num_traits::{One, Zero};
 

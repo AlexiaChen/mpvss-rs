@@ -39,7 +39,6 @@ use std::collections::BTreeMap;
 ///    15728E5A 8AACAA68 FFFFFFFF FFFFFFFF
 ///
 /// The generator is: 2.
-
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Default)]
 pub struct MPVSS {
@@ -170,7 +169,7 @@ impl MPVSS {
                 x = (x * distribute_sharesbox.commitments[j]
                     .modpow(&exponent, &self.q))
                     % &self.q;
-                exponent = (exponent * BigInt::from(*position.unwrap() as i64))
+                exponent = (exponent * BigInt::from(*position.unwrap()))
                     % &(self.q.clone() - BigInt::one());
             }
 
@@ -220,7 +219,9 @@ impl MPVSS {
                 exponent = (numerator.to_bigint().unwrap() * inverseDenom)
                     % q1.to_bigint().unwrap();
             } else {
-                eprintln!("ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed.");
+                eprintln!(
+                    "ERROR: Denominator of Lagrange coefficient fraction does not have an inverse. Share cannot be processed."
+                );
             }
         }
         let mut factor = share
@@ -234,7 +235,9 @@ impl MPVSS {
             if let Some(inversefactor) = inverseFactor {
                 factor = inversefactor;
             } else {
-                eprintln!("ERROR: Lagrange coefficient was negative and does not have an inverse. Share cannot be processed.")
+                eprintln!(
+                    "ERROR: Lagrange coefficient was negative and does not have an inverse. Share cannot be processed."
+                )
             }
         }
 
@@ -263,10 +266,7 @@ impl MPVSS {
         // ∏(i=1->t)(S^λ_i) = ∏(i=1->t)(G^p(i))^λ_i = G^(∑(i=1->t)p(i)*λ_i = G^p(0) = G^s,
         let mut secret: BigInt = BigInt::one();
         let values: Vec<i64> = shares.keys().copied().collect();
-        let shares_vec: Vec<(i64, BigInt)> = shares
-            .into_iter()
-            .map(|(postion, share)| (postion, share))
-            .collect();
+        let shares_vec: Vec<(i64, BigInt)> = shares.into_iter().collect();
         let shares_slice = shares_vec.as_slice();
         let factors: Vec<BigInt> = shares_slice
             .par_iter()
@@ -346,7 +346,7 @@ mod tests {
         let G: BigInt = BigInt::from(15486487);
 
         let length = 64_i64;
-        drop(length);
+        let _ = length;
 
         let mut mpvss = MPVSS::new();
         mpvss.q = q;

@@ -1,8 +1,9 @@
 # MPVSS - A Simple Publicly Verifiable Secret Sharing Library
 
-![CI](https://github.com/AlexiaChen/mpvss-rs/workflows/CI/badge.svg?branch=master) 
-![crates.io](https://github.com/AlexiaChen/mpvss-rs/workflows/Release/badge.svg?branch=release)
+[![CI](https://img.shields.io/github/actions/workflow/status/AlexiaChen/mpvss-rs/ci.yml?branch=master)](https://github.com/AlexiaChen/mpvss-rs/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/actions/workflow/status/AlexiaChen/mpvss-rs/release.yml?branch=release)](https://github.com/AlexiaChen/mpvss-rs/actions/workflows/release.yml)
 [![Crates.io](https://img.shields.io/crates/v/mpvss-rs)](https://crates.io/crates/mpvss-rs)
+[![License](https://img.shields.io/crates/l/mpvss-rs)](https://github.com/AlexiaChen/mpvss-rs)
 
 The library implements a simple PVSS scheme in Rust.
 

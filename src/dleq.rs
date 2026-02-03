@@ -99,7 +99,9 @@ pub struct DLEQ {
     pub q: BigInt,
     pub alpha: BigInt,
     pub c: Option<BigInt>,
+    #[allow(dead_code)]
     pub a1: BigInt,
+    #[allow(dead_code)]
     pub a2: BigInt,
     pub r: Option<BigInt>,
 }
@@ -215,7 +217,7 @@ mod tests {
         let alpha = BigInt::from(163027);
         let length = 64_i64;
 
-        drop(length);
+        let _ = length;
 
         let mut dleq = DLEQ::new();
         dleq.init2(g1, h1, g2, h2, q.clone(), alpha, w);

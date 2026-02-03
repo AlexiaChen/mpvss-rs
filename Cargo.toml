@@ -1,21 +1,21 @@
 [package]
 authors = ["MathxH Chen <brainfvck@foxmail.com>"]
 description = "A Simple Publicly Verifiable Secret Sharing Library"
-edition = "2021"
+edition = "2024"
 keywords = ["pvss-scheme", "secret-sharing", "threshold-crypto", "zero-knowledge-proof"]
 license = "MIT OR Apache-2.0"
 name = "mpvss-rs"
 readme = "README.md"
 repository = "https://github.com/AlexiaChen/mpvss-rs"
-version = "0.2.7"
+version = "0.2.8"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-num-bigint = {version = "0.2.6", features = ["rand"]}
-num-integer = "0.1.44"
-num-primes = "0.1.2"
-num-traits = "0.2.14"
-rand = "0.5.6"
-rayon = "1.5.0"
-sha2 = "0.9.2"
+num-bigint = {version = "0.2", features = ["rand"]}
+num-integer = "0.1"
+num-primes = "0.3"
+num-traits = "0.2"
+rand = "0.5"
+rayon = "1.11"
+sha2 = "0.10"
