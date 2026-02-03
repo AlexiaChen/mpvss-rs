@@ -14,13 +14,13 @@
 //! - **Base point (G)**: Standardized generator point
 
 #[cfg(feature = "secp256k1")]
-use k256::{Scalar, AffinePoint, ProjectivePoint, Secp256k1};
-#[cfg(feature = "secp256k1")]
-use k256::elliptic_curve::group::GroupEncoding;
-#[cfg(feature = "secp256k1")]
 use k256::elliptic_curve::FieldBytes;
 #[cfg(feature = "secp256k1")]
 use k256::elliptic_curve::ff::PrimeField;
+#[cfg(feature = "secp256k1")]
+use k256::elliptic_curve::group::GroupEncoding;
+#[cfg(feature = "secp256k1")]
+use k256::{AffinePoint, ProjectivePoint, Scalar, Secp256k1};
 #[cfg(feature = "secp256k1")]
 use sha2::{Digest, Sha256};
 #[cfg(feature = "secp256k1")]
@@ -47,10 +47,9 @@ impl Secp256k1Group {
         // secp256k1 curve order as little-endian bytes (PrimeField::from_repr expects little-endian)
         // ORDER = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
         let order_bytes: [u8; 32] = [
-            0x41, 0x41, 0x36, 0xD0, 0x8C, 0xE3, 0x25, 0xFD,
-            0x3B, 0xA0, 0x48, 0xF6, 0xA6, 0xEC, 0xBA, 0xAE,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0x41, 0x41, 0x36, 0xD0, 0x8C, 0xE3, 0x25, 0xFD, 0x3B, 0xA0, 0x48,
+            0xF6, 0xA6, 0xEC, 0xBA, 0xAE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
         let order = Scalar::from_repr(order_bytes.into()).unwrap();
 
@@ -85,7 +84,11 @@ impl Group for Secp256k1Group {
         AffinePoint::IDENTITY
     }
 
-    fn exp(&self, base: &Self::Element, scalar: &Self::Scalar) -> Self::Element {
+    fn exp(
+        &self,
+        base: &Self::Element,
+        scalar: &Self::Scalar,
+    ) -> Self::Element {
         // Scalar multiplication: scalar * base
         // Note: In EC notation, this is written as k*P (scalar multiplication)
         // which corresponds to G^k in MODP notation (exponentiation)
@@ -117,7 +120,8 @@ impl Group for Secp256k1Group {
         let mut field_bytes = FieldBytes::<Secp256k1>::default();
         let hash_len = hash.len().min(field_bytes.len());
         let field_bytes_len = field_bytes.len();
-        field_bytes[(field_bytes_len - hash_len)..].copy_from_slice(&hash[..hash_len]);
+        field_bytes[(field_bytes_len - hash_len)..]
+            .copy_from_slice(&hash[..hash_len]);
         // from_repr performs modular reduction modulo curve order
         Scalar::from_repr(field_bytes.into()).unwrap()
     }
@@ -160,6 +164,16 @@ impl Group for Secp256k1Group {
     fn generate_public_key(&self, private_key: &Self::Scalar) -> Self::Element {
         // Public key = private_key * G (scalar multiplication)
         (AffinePoint::GENERATOR * private_key).into()
+    }
+
+    fn scalar_mul(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar {
+        // k256 Scalar multiplication handles modular reduction automatically
+        a * b
+    }
+
+    fn scalar_sub(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar {
+        // k256 Scalar subtraction handles modular reduction automatically
+        a - b
     }
 }
 

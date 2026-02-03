@@ -54,7 +54,8 @@ pub trait Group: Clone + Send + Sync {
     /// - Public key generation: P = G^k or k*G
     /// - Commitment computation: C_j = g^a_j or a_j*g
     /// - Share encryption: Y_i = y_i^P(i) or P(i)*y_i
-    fn exp(&self, base: &Self::Element, scalar: &Self::Scalar) -> Self::Element;
+    fn exp(&self, base: &Self::Element, scalar: &Self::Scalar)
+    -> Self::Element;
 
     /// Group multiplication: A * B (MODP) or A + B (EC)
     ///
@@ -99,6 +100,16 @@ pub trait Group: Clone + Send + Sync {
 
     /// Derive public key from private key: P = G^k (MODP) or P = k*G (EC)
     fn generate_public_key(&self, private_key: &Self::Scalar) -> Self::Element;
+
+    /// Scalar multiplication: (a * b) mod order
+    ///
+    /// Used for DLEQ response computation: r = w - alpha*c
+    fn scalar_mul(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar;
+
+    /// Scalar subtraction: (a - b) mod order
+    ///
+    /// Used for DLEQ response computation: r = w - alpha*c
+    fn scalar_sub(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar;
 }
 
 /// Helper function to compute SHA-256 hash of multiple byte sequences

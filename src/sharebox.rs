@@ -158,7 +158,7 @@ pub struct GenericDistributionSharesBox<G: Group> {
     pub publickeys: Vec<G::Element>,
     pub challenge: G::Scalar,
     pub responses: BTreeMap<G::Element, G::Scalar>,
-    pub U: BigInt,  // Secret encoded as BigInt for cross-group compatibility
+    pub U: BigInt, // Secret encoded as BigInt for cross-group compatibility
 }
 
 impl<G: Group> Default for GenericDistributionSharesBox<G>

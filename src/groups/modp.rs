@@ -11,9 +11,8 @@ use num_bigint::{BigInt, BigUint, RandBigInt, ToBigInt};
 use num_integer::Integer;
 use num_primes::Generator;
 use num_traits::identities::{One, Zero};
-use rand::Rng;
-use std::sync::Arc;
 use sha2::{Digest, Sha256};
+use std::sync::Arc;
 
 use crate::group::Group;
 
@@ -76,6 +75,16 @@ impl ModpGroup {
             q_minus_1: q.to_bigint().unwrap() - BigInt::one(),
         })
     }
+
+    /// Get the safe prime modulus q
+    pub fn modulus(&self) -> &BigInt {
+        &self.q
+    }
+
+    /// Get the subgroup order g (Sophie Germain prime)
+    pub fn subgroup_order_value(&self) -> &BigInt {
+        &self.g
+    }
 }
 
 impl Group for ModpGroup {
@@ -102,7 +111,11 @@ impl Group for ModpGroup {
         BigInt::one()
     }
 
-    fn exp(&self, base: &Self::Element, scalar: &Self::Scalar) -> Self::Element {
+    fn exp(
+        &self,
+        base: &Self::Element,
+        scalar: &Self::Scalar,
+    ) -> Self::Element {
         base.modpow(scalar, &self.q)
     }
 
@@ -141,10 +154,10 @@ impl Group for ModpGroup {
     fn generate_private_key(&self) -> Self::Scalar {
         let mut rng = rand::thread_rng();
         loop {
-            let privkey: BigInt =
-                rng.gen_biguint_below(&self.q.to_biguint().unwrap())
-                    .to_bigint()
-                    .unwrap();
+            let privkey: BigInt = rng
+                .gen_biguint_below(&self.q.to_biguint().unwrap())
+                .to_bigint()
+                .unwrap();
             // Private key must be coprime to (q-1) for modular inverse during reconstruction
             if privkey.gcd(&self.q_minus_1) == BigInt::one() {
                 return privkey;
@@ -154,6 +167,20 @@ impl Group for ModpGroup {
 
     fn generate_public_key(&self, private_key: &Self::Scalar) -> Self::Element {
         self.exp(&self.G, private_key)
+    }
+
+    fn scalar_mul(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar {
+        (a * b) % self.order()
+    }
+
+    fn scalar_sub(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar {
+        let order = self.order();
+        let diff = a - b;
+        if diff < BigInt::zero() {
+            diff + order
+        } else {
+            diff % order
+        }
     }
 }
 
