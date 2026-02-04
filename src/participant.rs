@@ -1041,7 +1041,7 @@ mod tests {
 
     #[test]
     fn test_scalar_arithmetic_secp256k1() {
-        use num_bigint::{BigInt, ToBigInt};
+        use num_bigint::BigInt;
 
         let group = Secp256k1Group::new();
 
@@ -1107,8 +1107,6 @@ mod tests {
 
     #[test]
     fn test_dleq_basic_secp256k1() {
-        use num_bigint::{BigInt, ToBigInt};
-
         let group = Secp256k1Group::new();
         let mut dealer = Participant::with_arc(group.clone());
         dealer.initialize();
