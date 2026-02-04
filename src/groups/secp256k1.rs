@@ -133,7 +133,7 @@ impl Group for Secp256k1Group {
 
     fn element_to_bytes(&self, elem: &Self::Element) -> Vec<u8> {
         // Use GroupEncoding to_bytes() which returns CompressedPoint
-        elem.to_bytes().as_slice().to_vec()
+        elem.to_bytes().to_vec()
     }
 
     fn bytes_to_element(&self, bytes: &[u8]) -> Option<Self::Element> {
