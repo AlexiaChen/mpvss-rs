@@ -28,97 +28,69 @@ fn main() {
         p4.publickey.clone(),
     ];
 
-    let distribute_shares_box = dealer.distribute_secret_secp256k1(
+    let distribute_shares_box = dealer.distribute_secret(
         &string_to_secret(&secret_message),
         &publickeys,
         3,
     );
 
-    assert_eq!(
-        p1.verify_distribution_shares_secp256k1(&distribute_shares_box),
-        true
-    );
-    assert_eq!(
-        p2.verify_distribution_shares_secp256k1(&distribute_shares_box),
-        true
-    );
-    assert_eq!(
-        p3.verify_distribution_shares_secp256k1(&distribute_shares_box),
-        true
-    );
-    assert_eq!(
-        p4.verify_distribution_shares_secp256k1(&distribute_shares_box),
-        true
-    );
+    assert_eq!(p1.verify_distribution_shares(&distribute_shares_box), true);
+    assert_eq!(p2.verify_distribution_shares(&distribute_shares_box), true);
+    assert_eq!(p3.verify_distribution_shares(&distribute_shares_box), true);
+    assert_eq!(p4.verify_distribution_shares(&distribute_shares_box), true);
 
     // p1 extracts the share. [p2, p3 and p4 do this as well.]
     let w = group.generate_private_key();
 
     let s1 = p1
-        .extract_secret_share_secp256k1(
-            &distribute_shares_box,
-            &p1.privatekey,
-            &w,
-        )
+        .extract_secret_share(&distribute_shares_box, &p1.privatekey, &w)
         .unwrap();
 
     // p1, p2, p3, p4 exchange their decrypted shares.
     let s2 = p2
-        .extract_secret_share_secp256k1(
-            &distribute_shares_box,
-            &p2.privatekey,
-            &w,
-        )
+        .extract_secret_share(&distribute_shares_box, &p2.privatekey, &w)
         .unwrap();
     let s3 = p3
-        .extract_secret_share_secp256k1(
-            &distribute_shares_box,
-            &p3.privatekey,
-            &w,
-        )
+        .extract_secret_share(&distribute_shares_box, &p3.privatekey, &w)
         .unwrap();
     let s4 = p4
-        .extract_secret_share_secp256k1(
-            &distribute_shares_box,
-            &p4.privatekey,
-            &w,
-        )
+        .extract_secret_share(&distribute_shares_box, &p4.privatekey, &w)
         .unwrap();
 
     // p1 verifies the share received from p2. [Actually everybody verifies every received share.]
     assert_eq!(
-        p1.verify_share_secp256k1(&s2, &distribute_shares_box, &p2.publickey),
+        p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
         true
     );
 
     assert_eq!(
-        p2.verify_share_secp256k1(&s3, &distribute_shares_box, &p3.publickey),
+        p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
         true
     );
 
     assert_eq!(
-        p3.verify_share_secp256k1(&s1, &distribute_shares_box, &s1.publickey),
+        p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
         true
     );
 
     assert_eq!(
-        p4.verify_share_secp256k1(&s2, &distribute_shares_box, &s2.publickey),
+        p4.verify_share(&s2, &distribute_shares_box, &s2.publickey),
         true
     );
 
     // Threshold is 3, so p1, p2, p4 can reconstruct (or any 3 participants)
     let share_boxs = [s1.clone(), s2.clone(), s4.clone()];
     let r1 = dealer
-        .reconstruct_secp256k1(&share_boxs, &distribute_shares_box)
+        .reconstruct(&share_boxs, &distribute_shares_box)
         .unwrap();
     let r2 = dealer
-        .reconstruct_secp256k1(&share_boxs, &distribute_shares_box)
+        .reconstruct(&share_boxs, &distribute_shares_box)
         .unwrap();
     let r3 = dealer
-        .reconstruct_secp256k1(&share_boxs, &distribute_shares_box)
+        .reconstruct(&share_boxs, &distribute_shares_box)
         .unwrap();
     let r4 = dealer
-        .reconstruct_secp256k1(&share_boxs, &distribute_shares_box)
+        .reconstruct(&share_boxs, &distribute_shares_box)
         .unwrap();
 
     let r1_str = string_from_secret(&r1);

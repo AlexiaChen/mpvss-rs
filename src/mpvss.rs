@@ -9,13 +9,12 @@
 
 #![allow(non_snake_case)]
 
-use num_bigint::BigInt;
 use num_traits::identities::One;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 use crate::group::Group;
-use crate::sharebox::{DistributionSharesBox, ShareBox};
+use crate::sharebox::DistributionSharesBox;
 
 // ============================================================================
 // PVSS Structure
@@ -172,56 +171,6 @@ where
 }
 
 // ============================================================================
-// ModpGroup-Specific Implementation
-// ============================================================================
-
-impl PVSS<crate::groups::ModpGroup> {
-    /// Verify distribution shares (ModpGroup-specific implementation).
-    ///
-    /// This delegates to the existing ModpGroup implementation in generic_participant.
-    pub fn verify_distribution_shares_modp(
-        &self,
-        distribute_sharesbox: &DistributionSharesBox<crate::groups::ModpGroup>,
-    ) -> bool {
-        // Delegate to the existing implementation
-        // This avoids code duplication while we work on full generic support
-        use crate::participant::Participant;
-
-        let temp_participant = Participant::with_arc(self.group.clone());
-        temp_participant.verify_distribution_shares_modp(distribute_sharesbox)
-    }
-
-    /// Verify share (ModpGroup-specific implementation).
-    pub fn verify_share_modp(
-        &self,
-        sharebox: &ShareBox<crate::groups::ModpGroup>,
-        distribution_sharebox: &DistributionSharesBox<crate::groups::ModpGroup>,
-        publickey: &BigInt,
-    ) -> bool {
-        use crate::participant::Participant;
-
-        let temp_participant = Participant::with_arc(self.group.clone());
-        temp_participant.verify_share_modp(
-            sharebox,
-            distribution_sharebox,
-            publickey,
-        )
-    }
-
-    /// Reconstruct secret (ModpGroup-specific implementation).
-    pub fn reconstruct_modp(
-        &self,
-        share_boxes: &[ShareBox<crate::groups::ModpGroup>],
-        distribute_share_box: &DistributionSharesBox<crate::groups::ModpGroup>,
-    ) -> Option<BigInt> {
-        use crate::participant::Participant;
-
-        let temp_participant = Participant::with_arc(self.group.clone());
-        temp_participant.reconstruct_modp(share_boxes, distribute_share_box)
-    }
-}
-
-// ============================================================================
 // Tests
 // ============================================================================
 
@@ -242,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generic_mpvss_verify_distribution_shares_modp() {
+    fn test_generic_mpvss_verify_distribution_shares() {
         let group = ModpGroup::new();
         let mut dealer = Participant::with_arc(group.clone());
 
@@ -260,18 +209,18 @@ mod tests {
             p3.publickey.clone(),
         ];
 
-        let dist_box = dealer.distribute_secret_modp(
+        let dist_box = dealer.distribute_secret(
             &secret.to_bigint().unwrap(),
             &publickeys,
             3,
         );
 
-        let pvss = PVSS::new(group);
-        assert!(pvss.verify_distribution_shares_modp(&dist_box));
+        // Verify distribution shares using Participant directly
+        assert!(dealer.verify_distribution_shares(&dist_box));
     }
 
     #[test]
-    fn test_generic_mpvss_verify_share_modp() {
+    fn test_generic_mpvss_verify_share() {
         let group = ModpGroup::new();
         let mut rng = rand::thread_rng();
 
@@ -292,7 +241,7 @@ mod tests {
             p3.publickey.clone(),
         ];
 
-        let dist_box = dealer.distribute_secret_modp(
+        let dist_box = dealer.distribute_secret(
             &secret.to_bigint().unwrap(),
             &publickeys,
             3,
@@ -304,15 +253,15 @@ mod tests {
             .unwrap();
 
         let s1 = p1
-            .extract_secret_share_modp(&dist_box, &p1.privatekey, &w)
+            .extract_secret_share(&dist_box, &p1.privatekey, &w)
             .unwrap();
 
-        let pvss = PVSS::new(group);
-        assert!(pvss.verify_share_modp(&s1, &dist_box, &p1.publickey));
+        // Verify share using Participant directly
+        assert!(dealer.verify_share(&s1, &dist_box, &p1.publickey));
     }
 
     #[test]
-    fn test_generic_mpvss_reconstruct_modp() {
+    fn test_generic_mpvss_reconstruct() {
         let group = ModpGroup::new();
         let mut rng = rand::thread_rng();
 
@@ -333,7 +282,7 @@ mod tests {
             p3.publickey.clone(),
         ];
 
-        let dist_box = dealer.distribute_secret_modp(
+        let dist_box = dealer.distribute_secret(
             &secret.to_bigint().unwrap(),
             &publickeys,
             3,
@@ -345,18 +294,18 @@ mod tests {
             .unwrap();
 
         let s1 = p1
-            .extract_secret_share_modp(&dist_box, &p1.privatekey, &w)
+            .extract_secret_share(&dist_box, &p1.privatekey, &w)
             .unwrap();
         let s2 = p2
-            .extract_secret_share_modp(&dist_box, &p2.privatekey, &w)
+            .extract_secret_share(&dist_box, &p2.privatekey, &w)
             .unwrap();
         let s3 = p3
-            .extract_secret_share_modp(&dist_box, &p3.privatekey, &w)
+            .extract_secret_share(&dist_box, &p3.privatekey, &w)
             .unwrap();
 
-        let pvss = PVSS::new(group);
+        // Reconstruct using Participant directly
         let reconstructed =
-            pvss.reconstruct_modp(&[s1, s2, s3], &dist_box).unwrap();
+            dealer.reconstruct(&[s1, s2, s3], &dist_box).unwrap();
 
         assert_eq!(reconstructed.to_biguint().unwrap(), secret);
     }

@@ -20,7 +20,7 @@ fn test_mpvss_distribute_verify_reconstruct() {
     p2.initialize();
     p3.initialize();
 
-    let distribute_shares_box = dealer.distribute_secret_modp(
+    let distribute_shares_box = dealer.distribute_secret(
         &string_to_secret(&secret_message),
         &vec![
             p1.publickey.clone(),
@@ -30,20 +30,11 @@ fn test_mpvss_distribute_verify_reconstruct() {
         3,
     );
 
-    assert_eq!(
-        p1.verify_distribution_shares_modp(&distribute_shares_box),
-        true
-    );
+    assert_eq!(p1.verify_distribution_shares(&distribute_shares_box), true);
 
-    assert_eq!(
-        p2.verify_distribution_shares_modp(&distribute_shares_box),
-        true
-    );
+    assert_eq!(p2.verify_distribution_shares(&distribute_shares_box), true);
 
-    assert_eq!(
-        p3.verify_distribution_shares_modp(&distribute_shares_box),
-        true
-    );
+    assert_eq!(p3.verify_distribution_shares(&distribute_shares_box), true);
 
     // p1 extracts the share. [p2 and p3 do this as well.]
     let mut rng = rand::thread_rng();
@@ -53,45 +44,39 @@ fn test_mpvss_distribute_verify_reconstruct() {
         .unwrap();
 
     let s1 = p1
-        .extract_secret_share_modp(&distribute_shares_box, &p1.privatekey, &w)
+        .extract_secret_share(&distribute_shares_box, &p1.privatekey, &w)
         .unwrap();
 
     // p1, p2 and p3 exchange their descrypted shares.
     // ...
     let s2 = p2
-        .extract_secret_share_modp(&distribute_shares_box, &p2.privatekey, &w)
+        .extract_secret_share(&distribute_shares_box, &p2.privatekey, &w)
         .unwrap();
     let s3 = p3
-        .extract_secret_share_modp(&distribute_shares_box, &p3.privatekey, &w)
+        .extract_secret_share(&distribute_shares_box, &p3.privatekey, &w)
         .unwrap();
 
     // p1 verifies the share received from p2. [Actually everybody verifies every received share.]
 
     assert_eq!(
-        p1.verify_share_modp(&s2, &distribute_shares_box, &p2.publickey),
+        p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
         true
     );
 
     assert_eq!(
-        p2.verify_share_modp(&s3, &distribute_shares_box, &p3.publickey),
+        p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
         true
     );
 
     assert_eq!(
-        p3.verify_share_modp(&s1, &distribute_shares_box, &s1.publickey),
+        p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
         true
     );
 
     let share_boxs = [s1, s2, s3];
-    let r1 = p1
-        .reconstruct_modp(&share_boxs, &distribute_shares_box)
-        .unwrap();
-    let r2 = p2
-        .reconstruct_modp(&share_boxs, &distribute_shares_box)
-        .unwrap();
-    let r3 = p3
-        .reconstruct_modp(&share_boxs, &distribute_shares_box)
-        .unwrap();
+    let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+    let r2 = p2.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+    let r3 = p3.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
 
     let r1_str = string_from_secret(&r1);
     assert_eq!(secret_message.clone(), r1_str);

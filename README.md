@@ -20,9 +20,6 @@ Thus PVSS can be used to share a secret among a group of participants so that ei
 ```bash
 # Build all features
 cargo build --release
-
-# Build with secp256k1 support
-cargo build --release --features secp256k1
 ```
 
 ## Test
@@ -30,9 +27,6 @@ cargo build --release --features secp256k1
 ```bash
 # Run all tests
 cargo test --release
-
-# Run secp256k1-specific tests
-cargo test --release --features secp256k1
 ```
 
 ## Examples
@@ -42,9 +36,9 @@ cargo test --release --features secp256k1
 cargo run --release --example mpvss_all
 cargo run --release --example mpvss_sub
 
-# secp256k1 elliptic curve examples (requires feature flag)
-cargo run --release --features secp256k1 --example mpvss_all_secp256k1
-cargo run --release --features secp256k1 --example mpvss_sub_secp256k1
+# secp256k1 elliptic curve examples
+cargo run --release --example mpvss_all_secp256k1
+cargo run --release --example mpvss_sub_secp256k1
 ```
 
 ### Usage
@@ -81,25 +75,16 @@ The dealer splits the secret into shares, encrypts them and creates a proof so t
 
 ```rust
 // Dealer that shares the secret among p1, p2 and p3.
-let distribute_shares_box = dealer.distribute_secret_modp(
+let distribute_shares_box = dealer.distribute_secret(
         &string_to_secret(&secret_message),
         &vec![p1.publickey.clone(), p2.publickey.clone(), p3.publickey.clone()],
         3,
     );
 
 // p1 verifies distribution shares box containing encryted shares and proof of zero-knowlege. [p2 and p3 do this as well.]
-assert_eq!(
-    p1.verify_distribution_shares_modp(&distribute_shares_box),
-    true
-);
-assert_eq!(
-    p2.verify_distribution_shares_modp(&distribute_shares_box),
-    true
-);
-assert_eq!(
-    p3.verify_distribution_shares_modp(&distribute_shares_box),
-    true
-);
+assert_eq!(p1.verify_distribution_shares(&distribute_shares_box), true);
+assert_eq!(p2.verify_distribution_shares(&distribute_shares_box), true);
+assert_eq!(p3.verify_distribution_shares(&distribute_shares_box), true);
 ```
 
 #### Exchange & Verification
@@ -117,31 +102,22 @@ let w: num_bigint::BigInt = rng
 
 // p1 extracts the share. [p2 and p3 do this as well.]
 let s1 = p1
-    .extract_secret_share_modp(&distribute_shares_box, &p1.privatekey, &w)
+    .extract_secret_share(&distribute_shares_box, &p1.privatekey, &w)
     .unwrap();
 
 // p1, p2 and p3 exchange their descrypted shares.
 // ...
 let s2 = p2
-    .extract_secret_share_modp(&distribute_shares_box, &p2.privatekey, &w)
+    .extract_secret_share(&distribute_shares_box, &p2.privatekey, &w)
     .unwrap();
 let s3 = p3
-    .extract_secret_share_modp(&distribute_shares_box, &p3.privatekey, &w)
+    .extract_secret_share(&distribute_shares_box, &p3.privatekey, &w)
     .unwrap();
 
 // p1 verifies the share received from p2. [Actually everybody verifies every received share.]
-assert_eq!(
-    p1.verify_share_modp(&s2, &distribute_shares_box, &p2.publickey),
-    true
-);
-assert_eq!(
-    p2.verify_share_modp(&s3, &distribute_shares_box, &p3.publickey),
-    true
-);
-assert_eq!(
-    p3.verify_share_modp(&s1, &distribute_shares_box, &s1.publickey),
-    true
-);
+assert_eq!(p1.verify_share(&s2, &distribute_shares_box, &p2.publickey), true);
+assert_eq!(p2.verify_share(&s3, &distribute_shares_box, &p3.publickey), true);
+assert_eq!(p3.verify_share(&s1, &distribute_shares_box, &s1.publickey), true);
 ```
 
 #### Reconstruction
@@ -150,15 +126,9 @@ Once a participant collected at least `threshold` shares the secret can be recon
 
 ```rust
 let share_boxs = [s1, s2, s3];
-let r1 = p1
-    .reconstruct_modp(&share_boxs, &distribute_shares_box)
-    .unwrap();
-let r2 = p2
-    .reconstruct_modp(&share_boxs, &distribute_shares_box)
-    .unwrap();
-let r3 = p3
-    .reconstruct_modp(&share_boxs, &distribute_shares_box)
-    .unwrap();
+let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+let r2 = p2.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+let r3 = p3.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
 
 let r1_str = string_from_secret(&r1);
 assert_eq!(secret_message.clone(), r1_str);
@@ -170,21 +140,16 @@ assert_eq!(secret_message.clone(), r3_str);
 
 ### Generic Group Support
 
-The library now supports multiple cryptographic groups through a generic `Group` trait:
+The library supports multiple cryptographic groups through a generic `Group` trait:
 
 - **`ModpGroup`**: 2048-bit MODP group (RFC 3526) - Default implementation
-- **`Secp256k1Group`**: secp256k1 elliptic curve (Bitcoin's curve) - Requires `secp256k1` feature flag
+- **`Secp256k1Group`**: secp256k1 elliptic curve (Bitcoin's curve) - Always available
 
-The `Participant<G>` struct is generic over the group type, allowing the same PVSS operations to work with different cryptographic backends.
+The `Participant<G>` struct is generic over the group type, allowing the same PVSS operations to work with different cryptographic backends. The Rust compiler automatically selects the correct implementation based on the group type, so you use the same method names for all groups.
 
 #### secp256k1 Usage
 
 To use secp256k1 elliptic curve cryptography:
-
-```bash
-# Add to Cargo.toml
-mpvss-rs = { version = "0.2", features = ["secp256k1"] }
-```
 
 ```rust
 use mpvss_rs::groups::Secp256k1Group;
@@ -208,36 +173,31 @@ p1.initialize();
 p2.initialize();
 p3.initialize();
 
-// Distribution (use _secp256k1 suffix methods)
-let distribute_shares_box = dealer.distribute_secret_secp256k1(
+// Distribution - same method names as MODP
+let distribute_shares_box = dealer.distribute_secret(
     &string_to_secret(&secret_message),
     &vec![p1.publickey.clone(), p2.publickey.clone(), p3.publickey.clone()],
     3,
 );
 
-// Verification
-assert_eq!(p1.verify_distribution_shares_secp256k1(&distribute_shares_box), true);
+// Verification - same method names
+assert_eq!(p1.verify_distribution_shares(&distribute_shares_box), true);
 
 // Share extraction
 let w = group.generate_private_key(); // No need for BigInt RNG with secp256k1
-let s1 = p1.extract_secret_share_secp256k1(&distribute_shares_box, &p1.privatekey, &w).unwrap();
+let s1 = p1.extract_secret_share(&distribute_shares_box, &p1.privatekey, &w).unwrap();
 
-// Reconstruction
+// Reconstruction - same method names
 let share_boxs = [s1, s2, s3];
-let r1 = p1.reconstruct_secp256k1(&share_boxs, &distribute_shares_box).unwrap();
+let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
 ```
 
 **Key Differences for secp256k1:**
 - Elements are EC points (`k256::AffinePoint`) instead of `BigInt`
 - Scalars are `k256::Scalar` (32 bytes) instead of `BigInt`
-- Methods use `_secp256k1` suffix (e.g., `distribute_secret_secp256k1`)
+- Method names are the same as MODP (no suffix needed)
 - Private keys are generated via `group.generate_private_key()` instead of manual BigInt RNG
 - `Scalar::from_repr` expects big-endian byte representation
-
-## In the futures
-
-- Add more Elliptic Curves groups (other curves from the SEC2 standard)
-- Implement post-quantum secure PVSS schemes
 
 ## Related References:
 

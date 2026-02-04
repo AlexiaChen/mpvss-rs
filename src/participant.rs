@@ -137,101 +137,6 @@ impl<G: Group> Participant<G> {
         self.privatekey = self.group.generate_private_key();
         self.publickey = self.group.generate_public_key(&self.privatekey);
     }
-
-    /// Distribute a secret among participants.
-    ///
-    /// - Parameters:
-    ///   - `secret`: The value to be shared (as BigInt for cross-group compatibility)
-    ///   - `publickeys`: Array of public keys of each participant
-    ///   - `threshold`: Number of shares needed for reconstruction
-    ///
-    /// Returns a `DistributionSharesBox` containing encrypted shares and proofs
-    pub fn distribute_secret(
-        &mut self,
-        secret: &BigInt,
-        publickeys: &[G::Element],
-        threshold: u32,
-    ) -> DistributionSharesBox<G>
-    where
-        G::Scalar: Default,
-    {
-        self.distribute_secret_bytes(
-            &secret.to_bytes_be().1,
-            publickeys,
-            threshold,
-        )
-    }
-
-    /// Distribute a secret as bytes among participants.
-    pub fn distribute_secret_bytes(
-        &mut self,
-        secret: &[u8],
-        publickeys: &[G::Element],
-        threshold: u32,
-    ) -> DistributionSharesBox<G>
-    where
-        G::Scalar: Default,
-    {
-        // Stub implementation for generic groups
-        // Full implementation is provided for ModpGroup via distribute_secret_modp
-        let mut shares_box = DistributionSharesBox::new();
-        let mut commitments: Vec<G::Element> = Vec::new();
-        for _ in 0..threshold {
-            commitments.push(self.group.subgroup_generator());
-        }
-        let challenge = self.group.hash_to_scalar(b"distribute_challenge");
-        let secret_bigint =
-            BigInt::from_bytes_be(num_bigint::Sign::Plus, secret);
-        shares_box.init(
-            &commitments,
-            HashMap::new(),
-            HashMap::new(),
-            publickeys,
-            &challenge,
-            HashMap::new(),
-            &secret_bigint,
-        );
-        shares_box
-    }
-
-    /// Extract a secret share from the distribution box.
-    pub fn extract_secret_share(
-        &self,
-        _shares_box: &DistributionSharesBox<G>,
-        _private_key: &G::Scalar,
-    ) -> Option<ShareBox<G>> {
-        // TODO: Implement generic share extraction
-        None
-    }
-
-    /// Verify distribution shares.
-    pub fn verify_distribution_shares(
-        _shares_box: &DistributionSharesBox<G>,
-    ) -> bool {
-        // TODO: Implement generic verification
-        true
-    }
-
-    /// Verify a decrypted share.
-    pub fn verify_share(
-        &self,
-        _sharebox: &ShareBox<G>,
-        _distribution_sharebox: &DistributionSharesBox<G>,
-        _publickey: &G::Element,
-    ) -> bool {
-        // TODO: Implement generic verification
-        true
-    }
-
-    /// Reconstruct secret from shares.
-    pub fn reconstruct(
-        &self,
-        _share_boxs: &[ShareBox<G>],
-        _distribute_share_box: &DistributionSharesBox<G>,
-    ) -> Option<BigInt> {
-        // TODO: Implement generic reconstruction
-        None
-    }
 }
 
 // ============================================================================
@@ -245,7 +150,7 @@ impl<G: Group> Participant<G> {
 /// polynomial arithmetic, etc.).
 impl Participant<ModpGroup> {
     /// Distribute a secret among participants (full implementation for ModpGroup).
-    pub fn distribute_secret_modp(
+    pub fn distribute_secret(
         &mut self,
         secret: &BigInt,
         publickeys: &[BigInt],
@@ -389,7 +294,7 @@ impl Participant<ModpGroup> {
     /// - `shares_box`: The distribution shares box from the dealer
     /// - `private_key`: The participant's private key
     /// - `w`: Random witness for DLEQ proof
-    pub fn extract_secret_share_modp(
+    pub fn extract_secret_share(
         &self,
         shares_box: &DistributionSharesBox<ModpGroup>,
         private_key: &BigInt,
@@ -463,7 +368,7 @@ impl Participant<ModpGroup> {
     /// - `sharebox`: The share box containing the decrypted share
     /// - `distribution_sharebox`: The distribution shares box from the dealer
     /// - `publickey`: The public key of the participant who created the share
-    pub fn verify_share_modp(
+    pub fn verify_share(
         &self,
         sharebox: &ShareBox<ModpGroup>,
         distribution_sharebox: &DistributionSharesBox<ModpGroup>,
@@ -525,7 +430,7 @@ impl Participant<ModpGroup> {
     ///
     /// # Returns
     /// `true` if the distribution is valid, `false` otherwise
-    pub fn verify_distribution_shares_modp(
+    pub fn verify_distribution_shares(
         &self,
         distribute_sharesbox: &DistributionSharesBox<ModpGroup>,
     ) -> bool {
@@ -605,7 +510,7 @@ impl Participant<ModpGroup> {
     /// # Parameters
     /// - `share_boxes`: Array of share boxes from participants
     /// - `distribute_share_box`: The distribution shares box from the dealer
-    pub fn reconstruct_modp(
+    pub fn reconstruct(
         &self,
         share_boxes: &[ShareBox<ModpGroup>],
         distribute_share_box: &DistributionSharesBox<ModpGroup>,
@@ -779,7 +684,7 @@ mod tests {
         let threshold = 3;
 
         // Distribute secret
-        let dist_box = dealer.distribute_secret_modp(
+        let dist_box = dealer.distribute_secret(
             &secret.to_bigint().unwrap(),
             &publickeys,
             threshold,
@@ -787,9 +692,9 @@ mod tests {
 
         // ===== Step 1: Verify distribution =====
         // Each participant should verify the distribution is valid
-        let verified_by_p1 = dealer.verify_distribution_shares_modp(&dist_box);
-        let verified_by_p2 = dealer.verify_distribution_shares_modp(&dist_box);
-        let verified_by_p3 = dealer.verify_distribution_shares_modp(&dist_box);
+        let verified_by_p1 = dealer.verify_distribution_shares(&dist_box);
+        let verified_by_p2 = dealer.verify_distribution_shares(&dist_box);
+        let verified_by_p3 = dealer.verify_distribution_shares(&dist_box);
         assert!(verified_by_p1, "P1 should verify distribution as valid");
         assert!(verified_by_p2, "P2 should verify distribution as valid");
         assert!(verified_by_p3, "P3 should verify distribution as valid");
@@ -809,13 +714,13 @@ mod tests {
 
         // ===== Step 2: Extract shares =====
         let s1 = p1
-            .extract_secret_share_modp(&dist_box, &p1.privatekey, &w)
+            .extract_secret_share(&dist_box, &p1.privatekey, &w)
             .unwrap();
         let s2 = p2
-            .extract_secret_share_modp(&dist_box, &p2.privatekey, &w)
+            .extract_secret_share(&dist_box, &p2.privatekey, &w)
             .unwrap();
         let s3 = p3
-            .extract_secret_share_modp(&dist_box, &p3.privatekey, &w)
+            .extract_secret_share(&dist_box, &p3.privatekey, &w)
             .unwrap();
 
         // Verify extracted shares structure
@@ -830,31 +735,24 @@ mod tests {
 
         // ===== Step 3: Verify each extracted share =====
         // Each participant can verify other participants' shares
-        let p1_verifies_s2 =
-            dealer.verify_share_modp(&s2, &dist_box, &p2.publickey);
-        let p1_verifies_s3 =
-            dealer.verify_share_modp(&s3, &dist_box, &p3.publickey);
+        let p1_verifies_s2 = dealer.verify_share(&s2, &dist_box, &p2.publickey);
+        let p1_verifies_s3 = dealer.verify_share(&s3, &dist_box, &p3.publickey);
         assert!(p1_verifies_s2, "P1 should verify P2's share as valid");
         assert!(p1_verifies_s3, "P1 should verify P3's share as valid");
 
-        let p2_verifies_s1 =
-            dealer.verify_share_modp(&s1, &dist_box, &p1.publickey);
-        let p2_verifies_s3 =
-            dealer.verify_share_modp(&s3, &dist_box, &p3.publickey);
+        let p2_verifies_s1 = dealer.verify_share(&s1, &dist_box, &p1.publickey);
+        let p2_verifies_s3 = dealer.verify_share(&s3, &dist_box, &p3.publickey);
         assert!(p2_verifies_s1, "P2 should verify P1's share as valid");
         assert!(p2_verifies_s3, "P2 should verify P3's share as valid");
 
-        let p3_verifies_s1 =
-            dealer.verify_share_modp(&s1, &dist_box, &p1.publickey);
-        let p3_verifies_s2 =
-            dealer.verify_share_modp(&s2, &dist_box, &p2.publickey);
+        let p3_verifies_s1 = dealer.verify_share(&s1, &dist_box, &p1.publickey);
+        let p3_verifies_s2 = dealer.verify_share(&s2, &dist_box, &p2.publickey);
         assert!(p3_verifies_s1, "P3 should verify P1's share as valid");
         assert!(p3_verifies_s2, "P3 should verify P2's share as valid");
 
         // ===== Step 4: Reconstruct secret from verified shares =====
         let shares = vec![s1, s2, s3];
-        let reconstructed =
-            dealer.reconstruct_modp(&shares, &dist_box).unwrap();
+        let reconstructed = dealer.reconstruct(&shares, &dist_box).unwrap();
 
         // Verify reconstructed secret matches original
         let reconstructed_message = String::from_utf8(
@@ -904,7 +802,7 @@ mod tests {
         let threshold = 3;
 
         // Distribute secret
-        let dist_box = dealer.distribute_secret_secp256k1(
+        let dist_box = dealer.distribute_secret(
             &secret.to_bigint().unwrap(),
             &publickeys,
             threshold,
@@ -912,7 +810,7 @@ mod tests {
 
         // Verify distribution
         assert!(
-            dealer.verify_distribution_shares_secp256k1(&dist_box),
+            dealer.verify_distribution_shares(&dist_box),
             "Distribution should be valid"
         );
 
@@ -921,29 +819,28 @@ mod tests {
 
         // Extract shares
         let s1 = p1
-            .extract_secret_share_secp256k1(&dist_box, &p1.privatekey, &w)
+            .extract_secret_share(&dist_box, &p1.privatekey, &w)
             .unwrap();
         let s2 = p2
-            .extract_secret_share_secp256k1(&dist_box, &p2.privatekey, &w)
+            .extract_secret_share(&dist_box, &p2.privatekey, &w)
             .unwrap();
         let s3 = p3
-            .extract_secret_share_secp256k1(&dist_box, &p3.privatekey, &w)
+            .extract_secret_share(&dist_box, &p3.privatekey, &w)
             .unwrap();
 
         // Verify shares
         assert!(
-            dealer.verify_share_secp256k1(&s1, &dist_box, &p1.publickey),
+            dealer.verify_share(&s1, &dist_box, &p1.publickey),
             "P1's share should be valid"
         );
         assert!(
-            dealer.verify_share_secp256k1(&s3, &dist_box, &p3.publickey),
+            dealer.verify_share(&s3, &dist_box, &p3.publickey),
             "P3's share should be valid"
         );
 
         // Reconstruct from all 3 shares
         let shares = vec![s1, s2, s3];
-        let reconstructed =
-            dealer.reconstruct_secp256k1(&shares, &dist_box).unwrap();
+        let reconstructed = dealer.reconstruct(&shares, &dist_box).unwrap();
 
         // Verify reconstructed secret matches original
         let reconstructed_message = String::from_utf8(
@@ -993,7 +890,7 @@ mod tests {
         let threshold = 3;
 
         // Distribute secret
-        let dist_box = dealer.distribute_secret_secp256k1(
+        let dist_box = dealer.distribute_secret(
             &secret.to_bigint().unwrap(),
             &publickeys,
             threshold,
@@ -1001,7 +898,7 @@ mod tests {
 
         // Verify distribution
         assert!(
-            dealer.verify_distribution_shares_secp256k1(&dist_box),
+            dealer.verify_distribution_shares(&dist_box),
             "Distribution should be valid"
         );
 
@@ -1010,19 +907,18 @@ mod tests {
 
         // Extract only 3 shares (threshold)
         let s1 = p1
-            .extract_secret_share_secp256k1(&dist_box, &p1.privatekey, &w)
+            .extract_secret_share(&dist_box, &p1.privatekey, &w)
             .unwrap();
         let s3 = p3
-            .extract_secret_share_secp256k1(&dist_box, &p3.privatekey, &w)
+            .extract_secret_share(&dist_box, &p3.privatekey, &w)
             .unwrap();
         let s5 = p5
-            .extract_secret_share_secp256k1(&dist_box, &p5.privatekey, &w)
+            .extract_secret_share(&dist_box, &p5.privatekey, &w)
             .unwrap();
 
         // Reconstruct from 3 shares
         let shares = vec![s1, s3, s5];
-        let reconstructed =
-            dealer.reconstruct_secp256k1(&shares, &dist_box).unwrap();
+        let reconstructed = dealer.reconstruct(&shares, &dist_box).unwrap();
 
         // Verify reconstructed secret matches original
         let reconstructed_message = String::from_utf8(
@@ -1174,15 +1070,14 @@ mod tests {
         let threshold = 2;
 
         // Distribute secret
-        let dist_box = dealer.distribute_secret_secp256k1(
+        let dist_box = dealer.distribute_secret(
             &secret.to_bigint().unwrap(),
             &publickeys,
             threshold,
         );
 
         // Verify DLEQ proofs
-        let verification_result =
-            dealer.verify_distribution_shares_secp256k1(&dist_box);
+        let verification_result = dealer.verify_distribution_shares(&dist_box);
         if !verification_result {
             // Debug: print challenge and responses
             eprintln!("DEBUG: Distribution verification failed!");
@@ -1214,19 +1109,19 @@ mod tests {
 
         // Extract and verify shares
         let s1 = p1
-            .extract_secret_share_secp256k1(&dist_box, &p1.privatekey, &w)
+            .extract_secret_share(&dist_box, &p1.privatekey, &w)
             .unwrap();
         let s2 = p2
-            .extract_secret_share_secp256k1(&dist_box, &p2.privatekey, &w)
+            .extract_secret_share(&dist_box, &p2.privatekey, &w)
             .unwrap();
 
         // Verify share DLEQ proofs
         assert!(
-            dealer.verify_share_secp256k1(&s1, &dist_box, &p1.publickey),
+            dealer.verify_share(&s1, &dist_box, &p1.publickey),
             "P1's DLEQ proof should be valid"
         );
         assert!(
-            dealer.verify_share_secp256k1(&s2, &dist_box, &p2.publickey),
+            dealer.verify_share(&s2, &dist_box, &p2.publickey),
             "P2's DLEQ proof should be valid"
         );
 
@@ -1260,7 +1155,7 @@ impl Participant<Secp256k1Group> {
     /// - `threshold`: Number of shares needed for reconstruction
     ///
     /// Returns a `DistributionSharesBox` containing encrypted shares and DLEQ proofs
-    pub fn distribute_secret_secp256k1(
+    pub fn distribute_secret(
         &mut self,
         secret: &BigInt,
         publickeys: &[AffinePoint],
@@ -1698,7 +1593,7 @@ impl Participant<Secp256k1Group> {
     /// - `shares_box`: The distribution shares box from the dealer
     /// - `private_key`: The participant's private key (Scalar)
     /// - `w`: Random witness for DLEQ proof (Scalar)
-    pub fn extract_secret_share_secp256k1(
+    pub fn extract_secret_share(
         &self,
         shares_box: &DistributionSharesBox<Secp256k1Group>,
         private_key: &Scalar,
@@ -1760,7 +1655,7 @@ impl Participant<Secp256k1Group> {
     /// - `sharebox`: The share box containing the decrypted share
     /// - `distribution_sharebox`: The distribution shares box from the dealer
     /// - `publickey`: The public key (EC point) of the participant who created the share
-    pub fn verify_share_secp256k1(
+    pub fn verify_share(
         &self,
         sharebox: &ShareBox<Secp256k1Group>,
         distribution_sharebox: &DistributionSharesBox<Secp256k1Group>,
@@ -1811,7 +1706,7 @@ impl Participant<Secp256k1Group> {
     ///
     /// # Returns
     /// `true` if the distribution is valid, `false` otherwise
-    pub fn verify_distribution_shares_secp256k1(
+    pub fn verify_distribution_shares(
         &self,
         distribute_sharesbox: &DistributionSharesBox<Secp256k1Group>,
     ) -> bool {
@@ -1961,7 +1856,7 @@ impl Participant<Secp256k1Group> {
     ///
     /// # Returns
     /// `Some(secret)` if reconstruction succeeds, `None` otherwise
-    pub fn reconstruct_secp256k1(
+    pub fn reconstruct(
         &self,
         share_boxes: &[ShareBox<Secp256k1Group>],
         distribute_share_box: &DistributionSharesBox<Secp256k1Group>,
