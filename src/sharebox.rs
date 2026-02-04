@@ -6,7 +6,7 @@
 
 use num_bigint::BigInt;
 use num_traits::identities::Zero;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::vec::Vec;
 
 use crate::group::Group;
@@ -67,14 +67,21 @@ impl<G: Group> GenericShareBox<G> {
 /// Generic distribution shares box for any cryptographic group.
 ///
 /// Used to store all encrypted shares with commitments and proofs.
+///
+/// Note: Uses HashMap with Vec<u8> keys (serialized elements) instead of
+/// G::Element directly, to support group elements that don't implement Hash
+/// (e.g., EC points like AffinePoint).
 #[derive(Debug, Clone)]
 pub struct GenericDistributionSharesBox<G: Group> {
     pub commitments: Vec<G::Element>,
-    pub positions: BTreeMap<G::Element, i64>,
-    pub shares: BTreeMap<G::Element, G::Element>,
+    /// Maps serialized element bytes to position
+    pub positions: HashMap<Vec<u8>, i64>,
+    /// Maps serialized element bytes to encrypted share
+    pub shares: HashMap<Vec<u8>, G::Element>,
     pub publickeys: Vec<G::Element>,
     pub challenge: G::Scalar,
-    pub responses: BTreeMap<G::Element, G::Scalar>,
+    /// Maps serialized element bytes to response
+    pub responses: HashMap<Vec<u8>, G::Scalar>,
     pub U: BigInt, // Secret encoded as BigInt for cross-group compatibility
 }
 
@@ -85,11 +92,11 @@ where
     fn default() -> Self {
         GenericDistributionSharesBox {
             commitments: Vec::new(),
-            positions: BTreeMap::new(),
-            shares: BTreeMap::new(),
+            positions: HashMap::new(),
+            shares: HashMap::new(),
             publickeys: Vec::new(),
             challenge: Default::default(),
-            responses: BTreeMap::new(),
+            responses: HashMap::new(),
             U: BigInt::zero(),
         }
     }
@@ -103,15 +110,18 @@ impl<G: Group> GenericDistributionSharesBox<G> {
         Self::default()
     }
 
+    /// Initialize the distribution shares box.
+    ///
+    /// Note: positions, shares, and responses should use Vec<u8> keys (serialized elements).
     #[allow(clippy::too_many_arguments)]
     pub fn init(
         &mut self,
         commitments: &[G::Element],
-        positions: BTreeMap<G::Element, i64>,
-        shares: BTreeMap<G::Element, G::Element>,
+        positions: HashMap<Vec<u8>, i64>,
+        shares: HashMap<Vec<u8>, G::Element>,
         publickeys: &[G::Element],
         challenge: &G::Scalar,
-        responses: BTreeMap<G::Element, G::Scalar>,
+        responses: HashMap<Vec<u8>, G::Scalar>,
         U: &BigInt,
     ) {
         self.commitments = commitments.to_vec();

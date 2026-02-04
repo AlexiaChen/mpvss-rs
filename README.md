@@ -18,20 +18,33 @@ Thus PVSS can be used to share a secret among a group of participants so that ei
 ## Build
 
 ```bash
+# Build all features
 cargo build --release
+
+# Build with secp256k1 support
+cargo build --release --features secp256k1
 ```
 
 ## Test
 
 ```bash
+# Run all tests
 cargo test --release
+
+# Run secp256k1-specific tests
+cargo test --release --features secp256k1
 ```
 
-## Example
+## Examples
 
-```rust
+```bash
+# MODP group examples (default)
 cargo run --release --example mpvss_all
 cargo run --release --example mpvss_sub
+
+# secp256k1 elliptic curve examples (requires feature flag)
+cargo run --release --features secp256k1 --example mpvss_all_secp256k1
+cargo run --release --features secp256k1 --example mpvss_sub_secp256k1
 ```
 
 ### Usage
@@ -159,15 +172,72 @@ assert_eq!(secret_message.clone(), r3_str);
 
 The library now supports multiple cryptographic groups through a generic `Group` trait:
 
-- **`ModpGroup`**: 2048-bit MODP group (RFC 3526) - Original implementation
-- **`Secp256k1Group`**: secp256k1 elliptic curve (planned for future release)
+- **`ModpGroup`**: 2048-bit MODP group (RFC 3526) - Default implementation
+- **`Secp256k1Group`**: secp256k1 elliptic curve (Bitcoin's curve) - Requires `secp256k1` feature flag
 
 The `Participant<G>` struct is generic over the group type, allowing the same PVSS operations to work with different cryptographic backends.
 
+#### secp256k1 Usage
+
+To use secp256k1 elliptic curve cryptography:
+
+```bash
+# Add to Cargo.toml
+mpvss-rs = { version = "0.2", features = ["secp256k1"] }
+```
+
+```rust
+use mpvss_rs::groups::Secp256k1Group;
+use mpvss_rs::Participant;
+use mpvss_rs::group::Group; // Import Group trait for method access
+
+let secret_message = String::from("Hello MPVSS (secp256k1).");
+
+// Create the group (returns Arc<Secp256k1Group>)
+let group = Secp256k1Group::new();
+
+// Create dealer and participants with the group
+let mut dealer = Participant::with_arc(group.clone());
+dealer.initialize();
+
+let mut p1 = Participant::with_arc(Secp256k1Group::new());
+let mut p2 = Participant::with_arc(Secp256k1Group::new());
+let mut p3 = Participant::with_arc(Secp256k1Group::new());
+
+p1.initialize();
+p2.initialize();
+p3.initialize();
+
+// Distribution (use _secp256k1 suffix methods)
+let distribute_shares_box = dealer.distribute_secret_secp256k1(
+    &string_to_secret(&secret_message),
+    &vec![p1.publickey.clone(), p2.publickey.clone(), p3.publickey.clone()],
+    3,
+);
+
+// Verification
+assert_eq!(p1.verify_distribution_shares_secp256k1(&distribute_shares_box), true);
+
+// Share extraction
+let w = group.generate_private_key(); // No need for BigInt RNG with secp256k1
+let s1 = p1.extract_secret_share_secp256k1(&distribute_shares_box, &p1.privatekey, &w).unwrap();
+
+// Reconstruction
+let share_boxs = [s1, s2, s3];
+let r1 = p1.reconstruct_secp256k1(&share_boxs, &distribute_shares_box).unwrap();
+```
+
+**Key Differences for secp256k1:**
+- Elements are EC points (`k256::AffinePoint`) instead of `BigInt`
+- Scalars are `k256::Scalar` (32 bytes) instead of `BigInt`
+- Methods use `_secp256k1` suffix (e.g., `distribute_secret_secp256k1`)
+- Private keys are generated via `group.generate_private_key()` instead of manual BigInt RNG
+- `Scalar::from_repr` expects big-endian byte representation
+
 ## In the futures
 
-- Add more Elliptic Curves groups (secp256k1, etc.)
-- Implement generic versions of PVSS operations that work across all group types
+- Add more Elliptic Curves groups (other curves from the SEC2 standard)
+- Implement post-quantum secure PVSS schemes
 
 ## Related References:
 

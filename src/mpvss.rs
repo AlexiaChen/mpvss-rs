@@ -96,9 +96,12 @@ where
 
         // Verify each participant's encrypted share and accumulate hash
         for publickey in &distribute_sharesbox.publickeys {
-            let position = distribute_sharesbox.positions.get(publickey);
-            let response = distribute_sharesbox.responses.get(publickey);
-            let encrypted_share = distribute_sharesbox.shares.get(publickey);
+            // Serialize the element to use as HashMap key
+            let pubkey_bytes = self.group.element_to_bytes(publickey);
+            let position = distribute_sharesbox.positions.get(&pubkey_bytes);
+            let response = distribute_sharesbox.responses.get(&pubkey_bytes);
+            let encrypted_share =
+                distribute_sharesbox.shares.get(&pubkey_bytes);
 
             if position.is_none()
                 || response.is_none()
