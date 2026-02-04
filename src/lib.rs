@@ -1,6 +1,6 @@
 // Copyright 2020-2021  MathxH Chen.
 //
-// Code is licensed under GPLv3.0 License.
+// Code is licensed under MIT Apache Dual License
 
 //! # MPVSS - A Simple Publicly Verifiable Secret Sharing Library
 //!
@@ -18,15 +18,27 @@
 //!
 //! See [Github README](https://github.com/AlexiaChen/mpvss-rs/blob/master/README.md)
 
-mod dleq;
-mod mpvss;
-mod participant;
-mod polynomial;
-mod sharebox;
+// Core modules
+pub mod dleq;
+pub mod mpvss;
+pub mod participant;
+pub mod polynomial;
+pub mod sharebox;
 mod util;
 
-pub use participant::Participant;
+// Group abstractions (new 1.0.0 API)
+pub mod group;
+pub mod groups;
+
+// Public API exports
+pub use dleq::DLEQ;
+pub use mpvss::PVSS;
+pub use participant::{ModpParticipant, Participant};
 pub use sharebox::{DistributionSharesBox, ShareBox};
+
+// Type aliases for convenience
+/// Type alias for Participant with Secp256k1Group (elliptic curve cryptography)
+pub type Secp256k1Participant = Participant<crate::groups::Secp256k1Group>;
 
 use num_bigint::{BigInt, BigUint, ToBigInt};
 

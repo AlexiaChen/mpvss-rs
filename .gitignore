@@ -1,3 +1,5 @@
 /target
 Cargo.lock
 CLAUDE.md
+.claude
+.backup

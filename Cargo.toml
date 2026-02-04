@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 name = "mpvss-rs"
 readme = "README.md"
 repository = "https://github.com/AlexiaChen/mpvss-rs"
-version = "0.2.8"
+version = "1.0.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -19,3 +19,22 @@ num-traits = "0.2"
 rand = "0.5"
 rayon = "1.11"
 sha2 = "0.10"
+
+# Elliptic curve support
+k256 = { version = "0.13", features = ["arithmetic", "expose-field"] }
+
+[[example]]
+name = "mpvss_all"
+path = "examples/mpvss_all.rs"
+
+[[example]]
+name = "mpvss_sub"
+path = "examples/mpvss_sub.rs"
+
+[[example]]
+name = "mpvss_all_secp256k1"
+path = "examples/mpvss_all_secp256k1.rs"
+
+[[example]]
+name = "mpvss_sub_secp256k1"
+path = "examples/mpvss_sub_secp256k1.rs"

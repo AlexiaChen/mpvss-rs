@@ -5,7 +5,7 @@
 [![Crates.io](https://img.shields.io/crates/v/mpvss-rs)](https://crates.io/crates/mpvss-rs)
 [![License](https://img.shields.io/crates/l/mpvss-rs)](https://github.com/AlexiaChen/mpvss-rs)
 
-The library implements a simple PVSS scheme in Rust.
+The library implements a simple PVSS scheme in Rust with support for multiple cryptographic groups through a generic trait abstraction.
 
 ## What is PVSS?
 
@@ -18,37 +18,51 @@ Thus PVSS can be used to share a secret among a group of participants so that ei
 ## Build
 
 ```bash
+# Build all features
 cargo build --release
 ```
 
 ## Test
 
 ```bash
+# Run all tests
 cargo test --release
 ```
 
-## Example
+## Examples
 
-```rust
+```bash
+# MODP group examples (default)
 cargo run --release --example mpvss_all
 cargo run --release --example mpvss_sub
+
+# secp256k1 elliptic curve examples
+cargo run --release --example mpvss_all_secp256k1
+cargo run --release --example mpvss_sub_secp256k1
 ```
 
 ### Usage
 
 #### Initialization
 
-At first we convert our secret message into a numeric value if necessary. When creating the dealer a PVSS instance is created as well which holds all the global parameters that every participant needs to know.
+First, create a cryptographic group instance (e.g., `ModpGroup`) and initialize participants with key pairs.
 
 ```rust
+use mpvss_rs::groups::ModpGroup;
+use mpvss_rs::Participant;
+
 let secret_message = String::from("Hello MPVSS.");
 
-let mut dealer = Participant::new();
+// Create the group (returns Arc<ModpGroup>)
+let group = ModpGroup::new();
+
+// Create dealer and participants with the group
+let mut dealer = Participant::with_arc(group.clone());
 dealer.initialize();
 
-let mut p1 = Participant::new();
-let mut p2 = Participant::new();
-let mut p3 = Participant::new();
+let mut p1 = Participant::with_arc(group.clone());
+let mut p2 = Participant::with_arc(group.clone());
+let mut p3 = Participant::with_arc(group.clone());
 
 p1.initialize();
 p2.initialize();
@@ -63,23 +77,14 @@ The dealer splits the secret into shares, encrypts them and creates a proof so t
 // Dealer that shares the secret among p1, p2 and p3.
 let distribute_shares_box = dealer.distribute_secret(
         &string_to_secret(&secret_message),
-        &vec![p1.publickey, p2.publickey, p3.publickey],
+        &vec![p1.publickey.clone(), p2.publickey.clone(), p3.publickey.clone()],
         3,
     );
 
 // p1 verifies distribution shares box containing encryted shares and proof of zero-knowlege. [p2 and p3 do this as well.]
-assert_eq!(
-    p1.verify_distribution_shares(&distribute_shares_box),
-    true
-);
-assert_eq!(
-    p2.verify_distribution_shares(&distribute_shares_box),
-    true
-);
-assert_eq!(
-    p3.verify_distribution_shares(&distribute_shares_box),
-    true
-);
+assert_eq!(p1.verify_distribution_shares(&distribute_shares_box), true);
+assert_eq!(p2.verify_distribution_shares(&distribute_shares_box), true);
+assert_eq!(p3.verify_distribution_shares(&distribute_shares_box), true);
 ```
 
 #### Exchange & Verification
@@ -87,33 +92,32 @@ assert_eq!(
 The participants extract their shares from the distribution shares box and decrypt them. They bundle them together with a proof that allows the receiver to verify that the share is indeed the result of the decryption.
 
 ```rust
+// Generate random witness for share extraction
+use num_bigint::RandBigInt;
+let mut rng = rand::thread_rng();
+let w: num_bigint::BigInt = rng
+    .gen_biguint_below(&group.modulus().to_biguint().unwrap())
+    .to_bigint()
+    .unwrap();
+
 // p1 extracts the share. [p2 and p3 do this as well.]
 let s1 = p1
-    .extract_secret_share(&distribute_shares_box, &p1.privatekey)
+    .extract_secret_share(&distribute_shares_box, &p1.privatekey, &w)
     .unwrap();
 
 // p1, p2 and p3 exchange their descrypted shares.
 // ...
 let s2 = p2
-    .extract_secret_share(&distribute_shares_box, &p2.privatekey)
+    .extract_secret_share(&distribute_shares_box, &p2.privatekey, &w)
     .unwrap();
 let s3 = p3
-    .extract_secret_share(&distribute_shares_box, &p3.privatekey)
+    .extract_secret_share(&distribute_shares_box, &p3.privatekey, &w)
     .unwrap();
 
 // p1 verifies the share received from p2. [Actually everybody verifies every received share.]
-assert_eq!(
-    p1.verify_share(&s2, &distribute_shares_box, &p2.publickey),
-    true
-);
-assert_eq!(
-    p2.verify_share(&s3, &distribute_shares_box, &p3.publickey),
-    true
-);
-assert_eq!(
-    p3.verify_share(&s1, &distribute_shares_box, &s1.publickey),
-    true
-);
+assert_eq!(p1.verify_share(&s2, &distribute_shares_box, &p2.publickey), true);
+assert_eq!(p2.verify_share(&s3, &distribute_shares_box, &p3.publickey), true);
+assert_eq!(p3.verify_share(&s1, &distribute_shares_box, &s1.publickey), true);
 ```
 
 #### Reconstruction
@@ -122,15 +126,9 @@ Once a participant collected at least `threshold` shares the secret can be recon
 
 ```rust
 let share_boxs = [s1, s2, s3];
-let r1 = p1
-    .reconstruct(&share_boxs, &distribute_shares_box)
-    .unwrap();
-let r2 = p2
-    .reconstruct(&share_boxs, &distribute_shares_box)
-    .unwrap();
-let r3 = p3
-    .reconstruct(&share_boxs, &distribute_shares_box)
-    .unwrap();
+let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+let r2 = p2.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+let r3 = p3.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
 
 let r1_str = string_from_secret(&r1);
 assert_eq!(secret_message.clone(), r1_str);
@@ -140,9 +138,66 @@ let r3_str = string_from_secret(&r3);
 assert_eq!(secret_message.clone(), r3_str);
 ```
 
-## In the futures
+### Generic Group Support
 
-Add more Elliptic Curves groups.
+The library supports multiple cryptographic groups through a generic `Group` trait:
+
+- **`ModpGroup`**: 2048-bit MODP group (RFC 3526) - Default implementation
+- **`Secp256k1Group`**: secp256k1 elliptic curve (Bitcoin's curve) - Always available
+
+The `Participant<G>` struct is generic over the group type, allowing the same PVSS operations to work with different cryptographic backends. The Rust compiler automatically selects the correct implementation based on the group type, so you use the same method names for all groups.
+
+#### secp256k1 Usage
+
+To use secp256k1 elliptic curve cryptography:
+
+```rust
+use mpvss_rs::groups::Secp256k1Group;
+use mpvss_rs::Participant;
+use mpvss_rs::group::Group; // Import Group trait for method access
+
+let secret_message = String::from("Hello MPVSS (secp256k1).");
+
+// Create the group (returns Arc<Secp256k1Group>)
+let group = Secp256k1Group::new();
+
+// Create dealer and participants with the group
+let mut dealer = Participant::with_arc(group.clone());
+dealer.initialize();
+
+let mut p1 = Participant::with_arc(Secp256k1Group::new());
+let mut p2 = Participant::with_arc(Secp256k1Group::new());
+let mut p3 = Participant::with_arc(Secp256k1Group::new());
+
+p1.initialize();
+p2.initialize();
+p3.initialize();
+
+// Distribution - same method names as MODP
+let distribute_shares_box = dealer.distribute_secret(
+    &string_to_secret(&secret_message),
+    &vec![p1.publickey.clone(), p2.publickey.clone(), p3.publickey.clone()],
+    3,
+);
+
+// Verification - same method names
+assert_eq!(p1.verify_distribution_shares(&distribute_shares_box), true);
+
+// Share extraction
+let w = group.generate_private_key(); // No need for BigInt RNG with secp256k1
+let s1 = p1.extract_secret_share(&distribute_shares_box, &p1.privatekey, &w).unwrap();
+
+// Reconstruction - same method names
+let share_boxs = [s1, s2, s3];
+let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+```
+
+**Key Differences for secp256k1:**
+- Elements are EC points (`k256::AffinePoint`) instead of `BigInt`
+- Scalars are `k256::Scalar` (32 bytes) instead of `BigInt`
+- Method names are the same as MODP (no suffix needed)
+- Private keys are generated via `group.generate_private_key()` instead of manual BigInt RNG
+- `Scalar::from_repr` expects big-endian byte representation
 
 ## Related References:
 
