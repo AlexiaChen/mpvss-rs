@@ -1,6 +1,6 @@
 // Copyright 2020-2021  MathxH Chen.
 //
-// Code is licensed under GPLv3.0 License.
+// Code is licensed under MIT Apache Dual License
 
 use mpvss_rs::Participant;
 use mpvss_rs::groups::ModpGroup;

@@ -1,6 +1,6 @@
-// Copyright 2020-2024 MathxH Chen.
+// Copyright 2020-2026 MathxH Chen.
 //
-// Code is licensed under GPLv3.0 License.
+// Code is licensed under MIT Apache Dual License
 
 //! Cryptographic group abstraction for PVSS scheme.
 //!

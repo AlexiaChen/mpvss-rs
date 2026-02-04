@@ -1,6 +1,6 @@
 // Copyright 2020-2021  MathxH Chen.
 //
-// Code is licensed under GPLv3.0 License.
+// Code is licensed under MIT Apache Dual License
 
 use num_bigint::{BigInt, RandBigInt, ToBigInt};
 use num_traits::pow::Pow;

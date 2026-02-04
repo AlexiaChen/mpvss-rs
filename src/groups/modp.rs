@@ -1,6 +1,6 @@
-// Copyright 2020-2024 MathxH Chen.
+// Copyright 2020-2026 MathxH Chen.
 //
-// Code is licensed under GPLv3.0 License.
+// Code is licensed under MIT Apache Dual License
 
 //! MODP group implementation using RFC 3526 2048-bit safe prime.
 //!
