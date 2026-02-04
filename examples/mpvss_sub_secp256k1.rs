@@ -3,19 +3,19 @@
 // Code is licensed under GPLv3.0 License.
 
 use mpvss_rs::Participant;
-use mpvss_rs::groups::ModpGroup;
+use mpvss_rs::group::Group;
+use mpvss_rs::groups::Secp256k1Group;
 use mpvss_rs::{string_from_secret, string_to_secret};
-use num_bigint::{RandBigInt, ToBigInt};
 
 fn main() {
-    let group = ModpGroup::new();
-    let secret_message = String::from("Hello Sub MPVSS Example.");
+    let group = Secp256k1Group::new();
+    let secret_message = String::from("Hello Sub MPVSS Example (secp256k1).");
     let mut dealer = Participant::with_arc(group.clone());
     dealer.initialize();
-    let mut p1 = Participant::with_arc(ModpGroup::new());
-    let mut p2 = Participant::with_arc(ModpGroup::new());
-    let mut p3 = Participant::with_arc(ModpGroup::new());
-    let mut p4 = Participant::with_arc(ModpGroup::new());
+    let mut p1 = Participant::with_arc(Secp256k1Group::new());
+    let mut p2 = Participant::with_arc(Secp256k1Group::new());
+    let mut p3 = Participant::with_arc(Secp256k1Group::new());
+    let mut p4 = Participant::with_arc(Secp256k1Group::new());
     p1.initialize();
     p2.initialize();
     p3.initialize();
@@ -40,17 +40,13 @@ fn main() {
     assert_eq!(p4.verify_distribution_shares(&distribute_shares_box), true);
 
     // p1 extracts the share. [p2, p3 and p4 do this as well.]
-    let mut rng = rand::thread_rng();
-    let w: num_bigint::BigInt = rng
-        .gen_biguint_below(&group.modulus().to_biguint().unwrap())
-        .to_bigint()
-        .unwrap();
+    let w = group.generate_private_key();
 
     let s1 = p1
         .extract_secret_share(&distribute_shares_box, &p1.privatekey, &w)
         .unwrap();
 
-    // p1, p2, p3, p4 exchange their descrypted shares.
+    // p1, p2, p3, p4 exchange their decrypted shares.
     let s2 = p2
         .extract_secret_share(&distribute_shares_box, &p2.privatekey, &w)
         .unwrap();

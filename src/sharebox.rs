@@ -1,4 +1,4 @@
-// Copyright 2020-2021  MathxH Chen.
+// Copyright 2020-2024 MathxH Chen.
 //
 // Code is licensed under GPLv3.0 License.
 
@@ -6,33 +6,56 @@
 
 use num_bigint::BigInt;
 use num_traits::identities::Zero;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::vec::Vec;
 
-#[derive(Debug, Clone, Default)]
-pub struct ShareBox {
-    pub publickey: BigInt,
-    pub share: BigInt,
-    pub challenge: BigInt,
-    pub response: BigInt,
+use crate::group::Group;
+
+// ============================================================================
+// Generic ShareBox Types for 1.0.0 API
+// ============================================================================
+
+/// Generic share box for any cryptographic group.
+///
+/// Used to store a decrypted share along with its DLEQ proof.
+#[derive(Debug, Clone)]
+pub struct GenericShareBox<G: Group> {
+    pub publickey: G::Element,
+    pub share: G::Element,
+    pub challenge: G::Scalar,
+    pub response: G::Scalar,
 }
 
-impl ShareBox {
-    pub fn new() -> Self {
-        ShareBox {
-            publickey: BigInt::zero(),
-            share: BigInt::zero(),
-            challenge: BigInt::zero(),
-            response: BigInt::zero(),
+impl<G: Group> Default for GenericShareBox<G>
+where
+    G::Element: Default,
+    G::Scalar: Default,
+{
+    fn default() -> Self {
+        GenericShareBox {
+            publickey: Default::default(),
+            share: Default::default(),
+            challenge: Default::default(),
+            response: Default::default(),
         }
+    }
+}
+
+impl<G: Group> GenericShareBox<G> {
+    pub fn new() -> Self
+    where
+        G::Element: Default,
+        G::Scalar: Default,
+    {
+        Self::default()
     }
 
     pub fn init(
         &mut self,
-        publickey: BigInt,
-        share: BigInt,
-        challenge: BigInt,
-        response: BigInt,
+        publickey: G::Element,
+        share: G::Element,
+        challenge: G::Scalar,
+        response: G::Scalar,
     ) {
         self.publickey = publickey;
         self.share = share;
@@ -41,41 +64,64 @@ impl ShareBox {
     }
 }
 
-/// the  dealer  wishes to distribute a secret among participants P1,...,Pn.
-/// The dealer picks a randompolynomialp of degree at most t−1 with coefficients in Z_q
-#[derive(Debug, Clone, Default)]
-pub struct DistributionSharesBox {
-    pub commitments: Vec<BigInt>,
-    pub positions: BTreeMap<BigInt, i64>,
-    pub shares: BTreeMap<BigInt, BigInt>,
-    pub publickeys: Vec<BigInt>,
-    pub challenge: BigInt,
-    pub responses: BTreeMap<BigInt, BigInt>,
-    pub U: BigInt,
+/// Generic distribution shares box for any cryptographic group.
+///
+/// Used to store all encrypted shares with commitments and proofs.
+///
+/// Note: Uses HashMap with Vec<u8> keys (serialized elements) instead of
+/// G::Element directly, to support group elements that don't implement Hash
+/// (e.g., EC points like AffinePoint).
+#[derive(Debug, Clone)]
+pub struct GenericDistributionSharesBox<G: Group> {
+    pub commitments: Vec<G::Element>,
+    /// Maps serialized element bytes to position
+    pub positions: HashMap<Vec<u8>, i64>,
+    /// Maps serialized element bytes to encrypted share
+    pub shares: HashMap<Vec<u8>, G::Element>,
+    pub publickeys: Vec<G::Element>,
+    pub challenge: G::Scalar,
+    /// Maps serialized element bytes to response
+    pub responses: HashMap<Vec<u8>, G::Scalar>,
+    pub U: BigInt, // Secret encoded as BigInt for cross-group compatibility
 }
 
-impl DistributionSharesBox {
-    pub fn new() -> Self {
-        DistributionSharesBox {
+impl<G: Group> Default for GenericDistributionSharesBox<G>
+where
+    G::Scalar: Default,
+{
+    fn default() -> Self {
+        GenericDistributionSharesBox {
             commitments: Vec::new(),
-            positions: BTreeMap::new(),
-            shares: BTreeMap::new(),
+            positions: HashMap::new(),
+            shares: HashMap::new(),
             publickeys: Vec::new(),
-            challenge: BigInt::zero(),
-            responses: BTreeMap::new(),
+            challenge: Default::default(),
+            responses: HashMap::new(),
             U: BigInt::zero(),
         }
     }
+}
 
+impl<G: Group> GenericDistributionSharesBox<G> {
+    pub fn new() -> Self
+    where
+        G::Scalar: Default,
+    {
+        Self::default()
+    }
+
+    /// Initialize the distribution shares box.
+    ///
+    /// Note: positions, shares, and responses should use Vec<u8> keys (serialized elements).
     #[allow(clippy::too_many_arguments)]
     pub fn init(
         &mut self,
-        commitments: &[BigInt],
-        positions: BTreeMap<BigInt, i64>,
-        shares: BTreeMap<BigInt, BigInt>,
-        publickeys: &[BigInt],
-        challenge: &BigInt,
-        responses: BTreeMap<BigInt, BigInt>,
+        commitments: &[G::Element],
+        positions: HashMap<Vec<u8>, i64>,
+        shares: HashMap<Vec<u8>, G::Element>,
+        publickeys: &[G::Element],
+        challenge: &G::Scalar,
+        responses: HashMap<Vec<u8>, G::Scalar>,
         U: &BigInt,
     ) {
         self.commitments = commitments.to_vec();
@@ -87,3 +133,15 @@ impl DistributionSharesBox {
         self.U = U.clone();
     }
 }
+
+// ============================================================================
+// Type Aliases (Primary API)
+// ============================================================================
+
+/// Type alias for the generic ShareBox - primary API for 1.0.0
+/// Replaces the old non-generic ShareBox struct
+pub type ShareBox<G> = GenericShareBox<G>;
+
+/// Type alias for the generic DistributionSharesBox - primary API for 1.0.0
+/// Replaces the old non-generic DistributionSharesBox struct
+pub type DistributionSharesBox<G> = GenericDistributionSharesBox<G>;
