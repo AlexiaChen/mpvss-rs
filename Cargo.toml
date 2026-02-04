@@ -21,11 +21,7 @@ rayon = "1.11"
 sha2 = "0.10"
 
 # Elliptic curve support
-k256 = { version = "0.13", features = ["arithmetic", "expose-field"], optional = true }
-
-[features]
-default = []
-secp256k1 = ["k256"]
+k256 = { version = "0.13", features = ["arithmetic", "expose-field"] }
 
 [[example]]
 name = "mpvss_all"
@@ -38,9 +34,7 @@ path = "examples/mpvss_sub.rs"
 [[example]]
 name = "mpvss_all_secp256k1"
 path = "examples/mpvss_all_secp256k1.rs"
-required-features = ["secp256k1"]
 
 [[example]]
 name = "mpvss_sub_secp256k1"
 path = "examples/mpvss_sub_secp256k1.rs"
-required-features = ["secp256k1"]

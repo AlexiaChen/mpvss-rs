@@ -13,23 +13,20 @@
 //! - **Curve equation**: y² = x³ + 7 over F_p
 //! - **Base point (G)**: Standardized generator point
 
-#[cfg(feature = "secp256k1")]
 use k256::elliptic_curve::FieldBytes;
-#[cfg(feature = "secp256k1")]
+
 use k256::elliptic_curve::ff::PrimeField;
-#[cfg(feature = "secp256k1")]
+
 use k256::elliptic_curve::group::GroupEncoding;
-#[cfg(feature = "secp256k1")]
+
 use k256::{AffinePoint, ProjectivePoint, Scalar, Secp256k1};
-#[cfg(feature = "secp256k1")]
+
 use sha2::{Digest, Sha256};
-#[cfg(feature = "secp256k1")]
+
 use std::sync::Arc;
 
-#[cfg(feature = "secp256k1")]
 use crate::group::Group;
 
-#[cfg(feature = "secp256k1")]
 use num_bigint::BigInt;
 
 /// secp256k1 elliptic curve group (Bitcoin's curve)
@@ -38,12 +35,11 @@ use num_bigint::BigInt;
 /// on the curve are in the prime-order subgroup. This simplifies the PVSS
 /// implementation as we don't need to handle cofactor-related issues.
 #[derive(Debug, Clone)]
-#[cfg(feature = "secp256k1")]
+
 pub struct Secp256k1Group {
     order: BigInt,
 }
 
-#[cfg(feature = "secp256k1")]
 impl Secp256k1Group {
     /// Create a new secp256k1 group instance
     pub fn new() -> Arc<Self> {
@@ -60,7 +56,6 @@ impl Secp256k1Group {
     }
 }
 
-#[cfg(feature = "secp256k1")]
 impl Group for Secp256k1Group {
     type Scalar = Scalar;
     type Element = AffinePoint;
@@ -188,7 +183,6 @@ impl Group for Secp256k1Group {
     }
 }
 
-#[cfg(feature = "secp256k1")]
 impl Secp256k1Group {
     /// Get the curve order as BigInt for use in modular arithmetic
     pub fn order_as_bigint(&self) -> &BigInt {
@@ -197,7 +191,7 @@ impl Secp256k1Group {
 }
 
 #[cfg(test)]
-#[cfg(feature = "secp256k1")]
+
 mod tests {
     use super::*;
 

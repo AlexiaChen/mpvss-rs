@@ -38,7 +38,6 @@ pub use sharebox::{DistributionSharesBox, ShareBox};
 
 // Type aliases for convenience
 /// Type alias for Participant with Secp256k1Group (elliptic curve cryptography)
-#[cfg(feature = "secp256k1")]
 pub type Secp256k1Participant = Participant<crate::groups::Secp256k1Group>;
 
 use num_bigint::{BigInt, BigUint, ToBigInt};

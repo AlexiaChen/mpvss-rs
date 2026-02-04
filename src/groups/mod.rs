@@ -11,11 +11,9 @@
 
 pub mod modp;
 
-#[cfg(feature = "secp256k1")]
 pub mod secp256k1;
 
 // Re-export commonly used types
 pub use modp::ModpGroup;
 
-#[cfg(feature = "secp256k1")]
 pub use secp256k1::Secp256k1Group;

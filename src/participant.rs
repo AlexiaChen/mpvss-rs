@@ -22,13 +22,13 @@ use crate::polynomial::Polynomial;
 use crate::sharebox::{DistributionSharesBox, ShareBox};
 
 // secp256k1-specific imports (only available when feature is enabled)
-#[cfg(feature = "secp256k1")]
+
 use crate::groups::Secp256k1Group;
-#[cfg(feature = "secp256k1")]
+
 use k256::elliptic_curve::FieldBytes;
-#[cfg(feature = "secp256k1")]
+
 use k256::elliptic_curve::ff::PrimeField;
-#[cfg(feature = "secp256k1")]
+
 use k256::{AffinePoint, Scalar};
 
 // Type aliases for convenience
@@ -876,7 +876,7 @@ mod tests {
     // ========================================================================
 
     /// End-to-end test for secp256k1: distribute, extract, and reconstruct.
-    #[cfg(feature = "secp256k1")]
+
     #[test]
     fn test_end_to_end_secp256k1() {
         use num_bigint::{BigUint, ToBigInt};
@@ -959,7 +959,7 @@ mod tests {
     }
 
     /// Threshold test for secp256k1: 3-of-5 reconstruction.
-    #[cfg(feature = "secp256k1")]
+
     #[test]
     fn test_threshold_secp256k1() {
         use num_bigint::{BigUint, ToBigInt};
@@ -1038,7 +1038,7 @@ mod tests {
     }
 
     /// Basic DLEQ test for secp256k1 to verify scalar conversions.
-    #[cfg(feature = "secp256k1")]
+
     #[test]
     fn test_scalar_arithmetic_secp256k1() {
         use num_bigint::{BigInt, ToBigInt};
@@ -1104,7 +1104,7 @@ mod tests {
     }
 
     /// Basic DLEQ test for secp256k1 to verify scalar conversions.
-    #[cfg(feature = "secp256k1")]
+
     #[test]
     fn test_dleq_basic_secp256k1() {
         use num_bigint::{BigInt, ToBigInt};
@@ -1155,7 +1155,7 @@ mod tests {
     }
 
     /// DLEQ proof verification test for secp256k1.
-    #[cfg(feature = "secp256k1")]
+
     #[test]
     fn test_dleq_proofs_secp256k1() {
         use num_bigint::{BigUint, ToBigInt};
@@ -1253,7 +1253,6 @@ mod tests {
 ///
 /// Note: Uses Vec<u8> (serialized points) as HashMap keys since AffinePoint
 /// doesn't implement Hash.
-#[cfg(feature = "secp256k1")]
 impl Participant<Secp256k1Group> {
     /// Distribute a secret among participants (full implementation for Secp256k1Group).
     ///
@@ -1280,13 +1279,8 @@ impl Participant<Secp256k1Group> {
         let mut polynomial = Polynomial::new();
         // Use BigInt for polynomial arithmetic (compatible with Polynomial module)
         // For secp256k1, use order_as_bigint() to get the actual curve order as BigInt
-        #[cfg(feature = "secp256k1")]
+
         let group_order_bigint = self.group.order_as_bigint().clone();
-        #[cfg(not(feature = "secp256k1"))]
-        let group_order_bigint = BigInt::from_bytes_be(
-            num_bigint::Sign::Plus,
-            &self.group.scalar_to_bytes(group_order),
-        );
         polynomial.init((threshold - 1) as i32, &group_order_bigint);
 
         // Generate random witness w (scalar)
@@ -1679,14 +1673,10 @@ impl Participant<Secp256k1Group> {
         let hash_bytes = hash_scalar.to_bytes();
         let hash_biguint = BigUint::from_bytes_be(&hash_bytes);
         // For EC, we use the curve order as the modulus for U encoding
-        #[cfg(feature = "secp256k1")]
+
         let curve_order_bigint = BigUint::from_bytes_be(
             &self.group.order_as_bigint().to_bytes_be().1,
         );
-        #[cfg(not(feature = "secp256k1"))]
-        let scalar_bytes = self.group.scalar_to_bytes(group_order);
-        #[cfg(not(feature = "secp256k1"))]
-        let curve_order_bigint = BigUint::from_bytes_be(&scalar_bytes);
         let hash_reduced = hash_biguint % curve_order_bigint;
         let u = secret.to_biguint().unwrap() ^ hash_reduced;
 
@@ -2026,10 +2016,8 @@ impl Participant<Secp256k1Group> {
         let hash_bytes = hash_scalar.to_bytes();
         let hash_biguint = BigUint::from_bytes_be(&hash_bytes);
         // For EC, we use the curve order as the modulus for U encoding
-        #[cfg(feature = "secp256k1")]
+
         let scalar_bytes = self.group.order_as_bigint().to_bytes_be().1;
-        #[cfg(not(feature = "secp256k1"))]
-        let scalar_bytes = self.group.scalar_to_bytes(self.group.order());
         let curve_order_bigint = BigUint::from_bytes_be(&scalar_bytes);
         let hash_reduced = hash_biguint % curve_order_bigint;
         let decrypted_secret =
