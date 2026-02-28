@@ -261,10 +261,10 @@ mod tests {
         // Test the detailed byte-level conversion
         let original = BigInt::from(0x0102030405060708u64);
 
-        let (_, bytes_be) = original.to_bytes_be();
+        let (_, _bytes_be) = original.to_bytes_be();
 
         let scalar = Ristretto255Group::bigint_to_scalar(&original);
-        let scalar_bytes = scalar.to_bytes();
+        let _scalar_bytes = scalar.to_bytes();
 
         let recovered = Ristretto255Group::scalar_to_bigint(&scalar);
 
@@ -393,8 +393,8 @@ mod tests {
         let expected_hex = format!("{:x}", expected);
 
         // Check byte representations
-        let (_, order_be) = order.to_bytes_be();
-        let (_, expected_be) = expected.to_bytes_be();
+        let (_, _order_be) = order.to_bytes_be();
+        let (_, _expected_be) = expected.to_bytes_be();
 
         // The hex should match
         assert_eq!(order_hex, expected_hex, "Hex representations should match");
@@ -427,7 +427,7 @@ mod tests {
 
         // Scalar sum
         let scalar_sum = a_scalar + b_scalar + c_scalar;
-        let scalar_sum_recovered =
+        let _scalar_sum_recovered =
             Ristretto255Group::scalar_to_bigint(&scalar_sum);
 
         // BigInt sum then convert
@@ -468,7 +468,7 @@ mod tests {
 
         // Scalar sum
         let scalar_sum = a_scalar + b_scalar + c_scalar;
-        let scalar_sum_recovered =
+        let _scalar_sum_recovered =
             Ristretto255Group::scalar_to_bigint(&scalar_sum);
 
         // BigInt sum then convert
