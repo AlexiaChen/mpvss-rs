@@ -110,10 +110,12 @@ impl Ristretto255Group {
 
         // Find the actual length by skipping trailing zeros (which are MSB in BE)
         // In LE format, trailing zeros at the end are most significant zeros
-        let actual_len = bytes_le.iter().rposition(|&b| b != 0).map_or(0, |i| i + 1);
+        let actual_len =
+            bytes_le.iter().rposition(|&b| b != 0).map_or(0, |i| i + 1);
 
         // Reverse to get big-endian representation
-        let bytes_be: Vec<u8> = bytes_le[..actual_len].iter().rev().copied().collect();
+        let bytes_be: Vec<u8> =
+            bytes_le[..actual_len].iter().rev().copied().collect();
 
         if bytes_be.is_empty() {
             BigInt::from(0)
@@ -258,21 +260,18 @@ mod tests {
     fn test_bigint_scalar_detailed_conversion() {
         // Test the detailed byte-level conversion
         let original = BigInt::from(0x0102030405060708u64);
-        eprintln!("Original BigInt: {}", original);
-        eprintln!("Original hex: {:x}", original);
 
         let (_, bytes_be) = original.to_bytes_be();
-        eprintln!("BE bytes: {:?}", bytes_be);
 
         let scalar = Ristretto255Group::bigint_to_scalar(&original);
         let scalar_bytes = scalar.to_bytes();
-        eprintln!("Scalar bytes (LE): {:?}", scalar_bytes);
 
         let recovered = Ristretto255Group::scalar_to_bigint(&scalar);
-        eprintln!("Recovered BigInt: {}", recovered);
-        eprintln!("Recovered hex: {:x}", recovered);
 
-        assert_eq!(original, recovered, "Round-trip conversion should work for simple values");
+        assert_eq!(
+            original, recovered,
+            "Round-trip conversion should work for simple values"
+        );
     }
 
     #[test]
@@ -290,31 +289,18 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         // Generate random coefficients (mod order)
-        let a_0: BigInt = rng.gen_biguint_below(&order.to_biguint().unwrap()).to_bigint().unwrap();
-        let a_1: BigInt = rng.gen_biguint_below(&order.to_biguint().unwrap()).to_bigint().unwrap();
-        let a_2: BigInt = rng.gen_biguint_below(&order.to_biguint().unwrap()).to_bigint().unwrap();
-
-        // Debug: trace conversion for all values
-        for (name, value) in [("a_0", &a_0), ("a_1", &a_1), ("a_2", &a_2)] {
-            eprintln!("=== {} conversion trace ===", name);
-            eprintln!("{} BigInt: {}", name, value);
-            let (_, be_bytes) = value.to_bytes_be();
-            eprintln!("{} BE bytes (len={}): {:?}", name, be_bytes.len(), be_bytes);
-            let scalar = Ristretto255Group::bigint_to_scalar(value);
-            let scalar_bytes = scalar.to_bytes();
-            eprintln!("{} Scalar bytes: {:?}", name, scalar_bytes);
-
-            // Check for zeros in the middle of scalar bytes
-            let has_trailing_zeros = scalar_bytes.iter().rev().take_while(|&&b| b == 0).count() > 0;
-            eprintln!("{} has trailing zeros in Scalar: {}", name, has_trailing_zeros);
-
-            let recovered = Ristretto255Group::scalar_to_bigint(&scalar);
-            let (_, recovered_be) = recovered.to_bytes_be();
-            eprintln!("{} recovered: {}", name, recovered);
-            eprintln!("{} recovered BE bytes (len={}): {:?}", name, recovered_be.len(), recovered_be);
-            eprintln!("{} round-trip OK: {}", name, *value == recovered);
-            eprintln!();
-        }
+        let a_0: BigInt = rng
+            .gen_biguint_below(&order.to_biguint().unwrap())
+            .to_bigint()
+            .unwrap();
+        let a_1: BigInt = rng
+            .gen_biguint_below(&order.to_biguint().unwrap())
+            .to_bigint()
+            .unwrap();
+        let a_2: BigInt = rng
+            .gen_biguint_below(&order.to_biguint().unwrap())
+            .to_bigint()
+            .unwrap();
 
         // Convert to Scalar
         let a_0_scalar = Ristretto255Group::bigint_to_scalar(&a_0);
@@ -343,24 +329,20 @@ mod tests {
         let a_1_recovered = Ristretto255Group::scalar_to_bigint(&a_1_scalar);
         let a_2_recovered = Ristretto255Group::scalar_to_bigint(&a_2_scalar);
 
-        eprintln!("P(1) BigInt (unreduced): {}", p_1_bigint);
-        eprintln!("P(1) BigInt (mod order): {}", p_1_mod);
-        eprintln!("P(1) Scalar: {:?}", group.scalar_to_bytes(&p_1_scalar));
-        eprintln!("Scalar sum (a_0 + a_1 + a_2): {:?}", group.scalar_to_bytes(&scalar_sum));
-        eprintln!("Scalar sum == P(1) Scalar: {}", scalar_sum == p_1_scalar);
-        eprintln!();
-        eprintln!("X_1 from commitments: {:?}", group.element_to_bytes(&x_1_from_commitments));
-        eprintln!("X_1 from polynomial: {:?}", group.element_to_bytes(&x_1_from_polynomial));
-        eprintln!("Equal: {}", x_1_from_commitments == x_1_from_polynomial);
-
         // First verify round-trip conversion works
         assert_eq!(a_0, a_0_recovered, "a_0 round-trip conversion should work");
         assert_eq!(a_1, a_1_recovered, "a_1 round-trip conversion should work");
         assert_eq!(a_2, a_2_recovered, "a_2 round-trip conversion should work");
 
         // Verify scalar sum matches P(1) scalar
-        assert_eq!(scalar_sum, p_1_scalar, "Scalar sum should equal P(1) converted to Scalar");
-        assert_eq!(x_1_from_commitments, x_1_from_polynomial, "X_1 from commitments should equal g^P(1)");
+        assert_eq!(
+            scalar_sum, p_1_scalar,
+            "Scalar sum should equal P(1) converted to Scalar"
+        );
+        assert_eq!(
+            x_1_from_commitments, x_1_from_polynomial,
+            "X_1 from commitments should equal g^P(1)"
+        );
     }
 
     #[test]
@@ -386,20 +368,10 @@ mod tests {
         let bigint_sum_mod = &bigint_sum % &order;
         let from_bigint = Ristretto255Group::bigint_to_scalar(&bigint_sum_mod);
 
-        eprintln!("a: {}", a);
-        eprintln!("b: {}", b);
-        eprintln!("c: {}", c);
-        eprintln!("order: {}", order);
-        eprintln!("a+b+c (unreduced): {}", bigint_sum);
-        eprintln!("(a+b+c) mod order: {}", bigint_sum_mod);
-        eprintln!("a_scalar bytes: {:?}", a_scalar.to_bytes());
-        eprintln!("b_scalar bytes: {:?}", b_scalar.to_bytes());
-        eprintln!("c_scalar bytes: {:?}", c_scalar.to_bytes());
-        eprintln!("scalar_sum bytes: {:?}", scalar_sum.to_bytes());
-        eprintln!("from_bigint bytes: {:?}", from_bigint.to_bytes());
-        eprintln!("Equal: {}", scalar_sum == from_bigint);
-
-        assert_eq!(scalar_sum, from_bigint, "Scalar sum should equal BigInt sum converted to Scalar");
+        assert_eq!(
+            scalar_sum, from_bigint,
+            "Scalar sum should equal BigInt sum converted to Scalar"
+        );
     }
 
     #[test]
@@ -411,25 +383,18 @@ mod tests {
         // The Ristretto255 order is: l = 2^252 + 27742317777372353535851937790883648493
         // Use bit shifting instead of pow
         let two_252 = BigInt::from(1u64) << 252;
-        let constant = BigInt::parse_bytes(b"27742317777372353535851937790883648493", 10).unwrap();
+        let constant =
+            BigInt::parse_bytes(b"27742317777372353535851937790883648493", 10)
+                .unwrap();
         let expected = two_252 + constant;
-
-        eprintln!("Order from group: {}", order);
-        eprintln!("Expected order: {}", expected);
 
         // Also verify the hex representation
         let order_hex = format!("{:x}", order);
         let expected_hex = format!("{:x}", expected);
-        eprintln!("Order hex: {}", order_hex);
-        eprintln!("Expected hex: {}", expected_hex);
-        eprintln!("Order hex len: {}", order_hex.len());
-        eprintln!("Expected hex len: {}", expected_hex.len());
 
         // Check byte representations
         let (_, order_be) = order.to_bytes_be();
         let (_, expected_be) = expected.to_bytes_be();
-        eprintln!("Order BE bytes (len={}): {:?}", order_be.len(), order_be);
-        eprintln!("Expected BE bytes (len={}): {:?}", expected_be.len(), expected_be);
 
         // The hex should match
         assert_eq!(order_hex, expected_hex, "Hex representations should match");
@@ -445,13 +410,7 @@ mod tests {
         let half_order: BigInt = &order / 2;
         let a = half_order.clone();
         let b = half_order.clone();
-        let c = BigInt::from(1000u64);  // Small value to push sum just over order
-
-        eprintln!("order: {}", order);
-        eprintln!("half_order: {}", half_order);
-        eprintln!("a: {}", a);
-        eprintln!("b: {}", b);
-        eprintln!("c: {}", c);
+        let c = BigInt::from(1000u64); // Small value to push sum just over order
 
         let a_scalar = Ristretto255Group::bigint_to_scalar(&a);
         let b_scalar = Ristretto255Group::bigint_to_scalar(&b);
@@ -462,31 +421,24 @@ mod tests {
         let b_recovered = Ristretto255Group::scalar_to_bigint(&b_scalar);
         let c_recovered = Ristretto255Group::scalar_to_bigint(&c_scalar);
 
-        eprintln!("a_recovered: {}", a_recovered);
-        eprintln!("b_recovered: {}", b_recovered);
-        eprintln!("c_recovered: {}", c_recovered);
-
         assert_eq!(a, a_recovered, "a round-trip should work");
         assert_eq!(b, b_recovered, "b round-trip should work");
         assert_eq!(c, c_recovered, "c round-trip should work");
 
         // Scalar sum
         let scalar_sum = a_scalar + b_scalar + c_scalar;
-        let scalar_sum_recovered = Ristretto255Group::scalar_to_bigint(&scalar_sum);
+        let scalar_sum_recovered =
+            Ristretto255Group::scalar_to_bigint(&scalar_sum);
 
         // BigInt sum then convert
         let bigint_sum = &a + &b + &c;
         let bigint_sum_mod = &bigint_sum % &order;
         let from_bigint = Ristretto255Group::bigint_to_scalar(&bigint_sum_mod);
 
-        eprintln!("a+b+c (unreduced): {}", bigint_sum);
-        eprintln!("(a+b+c) mod order: {}", bigint_sum_mod);
-        eprintln!("scalar_sum as BigInt: {}", scalar_sum_recovered);
-        eprintln!("scalar_sum bytes: {:?}", scalar_sum.to_bytes());
-        eprintln!("from_bigint bytes: {:?}", from_bigint.to_bytes());
-        eprintln!("Equal: {}", scalar_sum == from_bigint);
-
-        assert_eq!(scalar_sum, from_bigint, "Scalar sum should equal BigInt sum converted to Scalar");
+        assert_eq!(
+            scalar_sum, from_bigint,
+            "Scalar sum should equal BigInt sum converted to Scalar"
+        );
     }
 
     #[test]
@@ -501,11 +453,6 @@ mod tests {
         let b = BigInt::parse_bytes(b"2000000000000000000000000000000000000000000000000000000000000000000000000000", 10).unwrap();
         let c = BigInt::parse_bytes(b"2000000000000000000000000000000000000000000000000000000000000000000000000000", 10).unwrap();
 
-        eprintln!("order: {}", order);
-        eprintln!("a: {}", a);
-        eprintln!("b: {}", b);
-        eprintln!("c: {}", c);
-
         let a_scalar = Ristretto255Group::bigint_to_scalar(&a);
         let b_scalar = Ristretto255Group::bigint_to_scalar(&b);
         let c_scalar = Ristretto255Group::bigint_to_scalar(&c);
@@ -515,30 +462,24 @@ mod tests {
         let b_recovered = Ristretto255Group::scalar_to_bigint(&b_scalar);
         let c_recovered = Ristretto255Group::scalar_to_bigint(&c_scalar);
 
-        eprintln!("a_recovered: {}", a_recovered);
-        eprintln!("b_recovered: {}", b_recovered);
-        eprintln!("c_recovered: {}", c_recovered);
-
         assert_eq!(a, a_recovered, "a round-trip should work");
         assert_eq!(b, b_recovered, "b round-trip should work");
         assert_eq!(c, c_recovered, "c round-trip should work");
 
         // Scalar sum
         let scalar_sum = a_scalar + b_scalar + c_scalar;
-        let scalar_sum_recovered = Ristretto255Group::scalar_to_bigint(&scalar_sum);
+        let scalar_sum_recovered =
+            Ristretto255Group::scalar_to_bigint(&scalar_sum);
 
         // BigInt sum then convert
         let bigint_sum = &a + &b + &c;
         let bigint_sum_mod = &bigint_sum % &order;
         let from_bigint = Ristretto255Group::bigint_to_scalar(&bigint_sum_mod);
 
-        eprintln!("a+b+c (unreduced): {}", bigint_sum);
-        eprintln!("(a+b+c) mod order: {}", bigint_sum_mod);
-        eprintln!("scalar_sum as BigInt: {}", scalar_sum_recovered);
-        eprintln!("scalar_sum bytes: {:?}", scalar_sum.to_bytes());
-        eprintln!("from_bigint bytes: {:?}", from_bigint.to_bytes());
-
-        assert_eq!(scalar_sum, from_bigint, "Scalar sum should equal BigInt sum converted to Scalar");
+        assert_eq!(
+            scalar_sum, from_bigint,
+            "Scalar sum should equal BigInt sum converted to Scalar"
+        );
     }
 
     #[test]
@@ -564,22 +505,18 @@ mod tests {
         let bigint_sum_mod = &bigint_sum % &order;
         let from_bigint = Ristretto255Group::bigint_to_scalar(&bigint_sum_mod);
 
-        eprintln!("a: {}", a);
-        eprintln!("b: {}", b);
-        eprintln!("c: {}", c);
-        eprintln!("a+b+c: {}", bigint_sum);
-        eprintln!("a_scalar: {:?}", a_scalar.to_bytes());
-        eprintln!("b_scalar: {:?}", b_scalar.to_bytes());
-        eprintln!("c_scalar: {:?}", c_scalar.to_bytes());
-        eprintln!("scalar_sum: {:?}", scalar_sum.to_bytes());
-        eprintln!("from_bigint: {:?}", from_bigint.to_bytes());
-
         // Verify scalar_sum equals 6000
         let sum_recovered = Ristretto255Group::scalar_to_bigint(&scalar_sum);
-        eprintln!("sum_recovered: {}", sum_recovered);
-        assert_eq!(sum_recovered, BigInt::from(6000u64), "Scalar sum should be 6000");
+        assert_eq!(
+            sum_recovered,
+            BigInt::from(6000u64),
+            "Scalar sum should be 6000"
+        );
 
-        assert_eq!(scalar_sum, from_bigint, "Scalar sum should equal BigInt sum converted to Scalar");
+        assert_eq!(
+            scalar_sum, from_bigint,
+            "Scalar sum should equal BigInt sum converted to Scalar"
+        );
     }
 
     #[test]
@@ -605,18 +542,10 @@ mod tests {
         let a_sum = a_0 + a_1 + a_2;
         let g_sum = group.exp(&g, &a_sum);
 
-        eprintln!("C_0: {:?}", group.element_to_bytes(&c_0));
-        eprintln!("C_1: {:?}", group.element_to_bytes(&c_1));
-        eprintln!("C_2: {:?}", group.element_to_bytes(&c_2));
-        eprintln!("C_0 + C_1 + C_2: {:?}", group.element_to_bytes(&c_sum));
-        eprintln!("a_0: {:?}", group.scalar_to_bytes(&a_0));
-        eprintln!("a_1: {:?}", group.scalar_to_bytes(&a_1));
-        eprintln!("a_2: {:?}", group.scalar_to_bytes(&a_2));
-        eprintln!("a_0 + a_1 + a_2: {:?}", group.scalar_to_bytes(&a_sum));
-        eprintln!("g^(a_0+a_1+a_2): {:?}", group.element_to_bytes(&g_sum));
-        eprintln!("Equal: {}", c_sum == g_sum);
-
-        assert_eq!(c_sum, g_sum, "C_0 + C_1 + C_2 should equal g^(a_0 + a_1 + a_2)");
+        assert_eq!(
+            c_sum, g_sum,
+            "C_0 + C_1 + C_2 should equal g^(a_0 + a_1 + a_2)"
+        );
     }
 
     #[test]
@@ -646,15 +575,6 @@ mod tests {
         let x_c = group.exp(&x, &c);
         let verify_a1 = group.mul(&g_r, &x_c);
 
-        eprintln!("w: {:?}", group.scalar_to_bytes(&w));
-        eprintln!("alpha: {:?}", group.scalar_to_bytes(&alpha));
-        eprintln!("c: {:?}", group.scalar_to_bytes(&c));
-        eprintln!("r (= w - alpha*c): {:?}", group.scalar_to_bytes(&r));
-        eprintln!("g^w (distribution a1): {:?}", group.element_to_bytes(&g_w));
-        eprintln!("g^r: {:?}", group.element_to_bytes(&g_r));
-        eprintln!("X^c: {:?}", group.element_to_bytes(&x_c));
-        eprintln!("g^r * X^c (verification a1): {:?}", group.element_to_bytes(&verify_a1));
-
         assert_eq!(g_w, verify_a1, "g^w should equal g^r * X^c");
     }
 
@@ -672,11 +592,6 @@ mod tests {
         let g_b = group.exp(&g, &b);
         let g_a_plus_b = group.exp(&g, &a_plus_b);
         let g_a_mul_g_b = group.mul(&g_a, &g_b);
-
-        eprintln!("g^a: {:?}", group.element_to_bytes(&g_a));
-        eprintln!("g^b: {:?}", group.element_to_bytes(&g_b));
-        eprintln!("g^(a+b): {:?}", group.element_to_bytes(&g_a_plus_b));
-        eprintln!("g^a * g^b: {:?}", group.element_to_bytes(&g_a_mul_g_b));
 
         assert_eq!(g_a_plus_b, g_a_mul_g_b, "g^(a+b) should equal g^a * g^b");
     }

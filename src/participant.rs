@@ -771,10 +771,6 @@ mod tests {
             reconstructed_message, secret_message,
             "Reconstructed message should match original"
         );
-
-        println!(
-            "End-to-end test passed: distribute, extract, and reconstruct all work correctly"
-        );
     }
 
     // ========================================================================
@@ -859,8 +855,6 @@ mod tests {
             reconstructed_message, secret_message,
             "Reconstructed message should match original"
         );
-
-        println!("secp256k1 end-to-end test passed");
     }
 
     /// Threshold test for secp256k1: 3-of-5 reconstruction.
@@ -937,8 +931,6 @@ mod tests {
             reconstructed_message, secret_message,
             "Reconstructed message should match original"
         );
-
-        println!("secp256k1 threshold test passed");
     }
 
     /// Basic DLEQ test for secp256k1 to verify scalar conversions.
@@ -1004,7 +996,6 @@ mod tests {
             sum_ab_g, s_times_g,
             "Scalar arithmetic: (a+b)*g should equal a*g + b*g"
         );
-        eprintln!("Scalar arithmetic test passed!");
     }
 
     /// Basic DLEQ test for secp256k1 to verify scalar conversions.
@@ -1053,7 +1044,6 @@ mod tests {
 
         // Verify should succeed
         assert!(dleq.verify(), "Basic DLEQ proof should verify");
-        eprintln!("Basic DLEQ test passed!");
     }
 
     /// DLEQ proof verification test for secp256k1.
@@ -1085,30 +1075,8 @@ mod tests {
         );
 
         // Verify DLEQ proofs
-        let verification_result = dealer.verify_distribution_shares(&dist_box);
-        if !verification_result {
-            // Debug: print challenge and responses
-            eprintln!("DEBUG: Distribution verification failed!");
-            eprintln!(
-                "Challenge bytes: {:?}",
-                dealer.group.scalar_to_bytes(&dist_box.challenge)
-            );
-            for (i, pubkey) in dist_box.publickeys.iter().enumerate() {
-                let pubkey_bytes = dealer.group.element_to_bytes(pubkey);
-                if let Some(pos) = dist_box.positions.get(&pubkey_bytes) {
-                    eprintln!("Participant {}: position={}", i + 1, pos);
-                }
-                if let Some(resp) = dist_box.responses.get(&pubkey_bytes) {
-                    eprintln!(
-                        "Participant {}: response bytes: {:?}",
-                        i + 1,
-                        dealer.group.scalar_to_bytes(resp)
-                    );
-                }
-            }
-        }
         assert!(
-            verification_result,
+            dealer.verify_distribution_shares(&dist_box),
             "Distribution DLEQ proofs should be valid"
         );
 
@@ -1132,8 +1100,6 @@ mod tests {
             dealer.verify_share(&s2, &dist_box, &p2.publickey),
             "P2's DLEQ proof should be valid"
         );
-
-        println!("secp256k1 DLEQ proofs test passed");
     }
 }
 
@@ -1221,7 +1187,7 @@ impl Participant<Secp256k1Group> {
         }
 
         // Calculate encrypted shares for each participant
-        for (idx, pubkey) in publickeys.iter().enumerate() {
+        for pubkey in publickeys.iter() {
             let pubkey_bytes = self.group.element_to_bytes(pubkey);
             positions.insert(pubkey_bytes.clone(), position);
 
@@ -1257,219 +1223,6 @@ impl Participant<Secp256k1Group> {
                 exponent = self.group.scalar_mul(&exponent, &pos_scalar);
             }
 
-            // Debug: Verify X_i = secret_share * g (for first participant)
-            if position == 1 {
-                // Calculate P(1) directly by summing all coefficients (P(1) = a0 + a1*1 + a2*1^2 + ...)
-                let p1_bigint: BigInt =
-                    polynomial.coefficients.iter().cloned().sum();
-                let p1_mod = &p1_bigint % &group_order_bigint;
-
-                eprintln!("  p1_bigint = {}", p1_bigint);
-                eprintln!("  p1_mod = {}", p1_mod);
-                eprintln!("  group_order_bigint = {}", group_order_bigint);
-
-                // Convert to Scalar - verify the conversion
-                let p1_bytes = p1_mod.to_bytes_be().1;
-                eprintln!("  p1_mod to_bytes_be() result: {:?}", p1_bytes);
-                let mut field_bytes = FieldBytes::<k256::Secp256k1>::default();
-                if p1_bytes.len() < 32 {
-                    eprintln!(
-                        "  Right-aligning: copying {} bytes to end",
-                        p1_bytes.len()
-                    );
-                    field_bytes[32 - p1_bytes.len()..]
-                        .copy_from_slice(&p1_bytes);
-                } else {
-                    eprintln!("  Truncating: copying last 32 bytes");
-                    field_bytes
-                        .copy_from_slice(&p1_bytes[p1_bytes.len() - 32..]);
-                }
-                eprintln!("  field_bytes before from_repr: {:?}", field_bytes);
-                let p1_scalar = Scalar::from_repr(field_bytes).unwrap();
-                eprintln!(
-                    "  p1_scalar bytes (after from_repr): {:?}",
-                    self.group.scalar_to_bytes(&p1_scalar)
-                );
-
-                // Calculate g^P(1)
-                let gp1 = self.group.exp(&subgroup_gen, &p1_scalar);
-
-                eprintln!("DEBUG: Detailed verification:");
-                eprintln!("  P(1) = sum of coefficients = {}", p1_bigint);
-                eprintln!("  P(1) mod order = {}", p1_mod);
-                let ss_val = BigInt::from_bytes_be(
-                    num_bigint::Sign::Plus,
-                    &self.group.scalar_to_bytes(&secret_share),
-                );
-                eprintln!(
-                    "  secret_share (as Scalar back to BigInt) = {}",
-                    ss_val
-                );
-                eprintln!(
-                    "  P(1) mod order bytes: {:?}",
-                    self.group.scalar_to_bytes(&p1_scalar)
-                );
-                eprintln!(
-                    "  secret_share bytes: {:?}",
-                    self.group.scalar_to_bytes(&secret_share)
-                );
-                eprintln!(
-                    "  p1_scalar == secret_share as Scalar? {}",
-                    p1_scalar == secret_share
-                );
-                eprintln!(
-                    "  g^P(1) bytes: {:?}",
-                    self.group.element_to_bytes(&gp1)
-                );
-                eprintln!(
-                    "  X_i bytes: {:?}",
-                    self.group.element_to_bytes(&x_val)
-                );
-                eprintln!(
-                    "  Are P(1) mod and secret_share equal? {}",
-                    p1_mod == ss_val
-                );
-
-                // Debug commitments
-                for (i, c) in commitments.iter().enumerate() {
-                    eprintln!(
-                        "  C_{} bytes: {:?}",
-                        i,
-                        self.group.element_to_bytes(c)
-                    );
-                }
-
-                // Manual calculation: sum all commitments should equal g^(sum of coefficients)
-                let manual_sum =
-                    commitments.iter().fold(self.group.identity(), |acc, c| {
-                        self.group.mul(&acc, c)
-                    });
-                eprintln!(
-                    "  Sum of commitments bytes: {:?}",
-                    self.group.element_to_bytes(&manual_sum)
-                );
-
-                // Also try: direct scalar multiplication of each coefficient's commitment
-                // This should equal what the X_i calculation loop does
-                eprintln!("  DEBUG: Let's verify the commitments calculation:");
-                eprintln!(
-                    "    subgroup_gen bytes: {:?}",
-                    self.group.element_to_bytes(&subgroup_gen)
-                );
-
-                // Recreate commitment C_0 = a0 * g and verify
-                let a0_bytes = polynomial.coefficients[0].to_bytes_be().1;
-                eprintln!("    a0 bytes: {:?}", a0_bytes);
-                let mut fb0 = FieldBytes::<k256::Secp256k1>::default();
-                if a0_bytes.len() < 32 {
-                    fb0[32 - a0_bytes.len()..].copy_from_slice(&a0_bytes);
-                } else {
-                    fb0.copy_from_slice(&a0_bytes[a0_bytes.len() - 32..]);
-                }
-                eprintln!("    a0 field_bytes: {:?}", fb0);
-                let a0_scalar = Scalar::from_repr(fb0).unwrap();
-                eprintln!(
-                    "    a0_scalar bytes (after from_repr): {:?}",
-                    self.group.scalar_to_bytes(&a0_scalar)
-                );
-                let c0_recreated = self.group.exp(&subgroup_gen, &a0_scalar);
-                eprintln!(
-                    "    C_0 recreated bytes: {:?}",
-                    self.group.element_to_bytes(&c0_recreated)
-                );
-                eprintln!(
-                    "    C_0 == recreated? {}",
-                    commitments[0] == c0_recreated
-                );
-
-                // Recreate commitment C_1 = a1 * g and verify
-                let a1_bytes = polynomial.coefficients[1].to_bytes_be().1;
-                eprintln!("    a1 bytes: {:?}", a1_bytes);
-                let mut fb1 = FieldBytes::<k256::Secp256k1>::default();
-                if a1_bytes.len() < 32 {
-                    fb1[32 - a1_bytes.len()..].copy_from_slice(&a1_bytes);
-                } else {
-                    fb1.copy_from_slice(&a1_bytes[a1_bytes.len() - 32..]);
-                }
-                eprintln!("    a1 field_bytes: {:?}", fb1);
-                let a1_scalar = Scalar::from_repr(fb1).unwrap();
-                eprintln!(
-                    "    a1_scalar bytes (after from_repr): {:?}",
-                    self.group.scalar_to_bytes(&a1_scalar)
-                );
-                let c1_recreated = self.group.exp(&subgroup_gen, &a1_scalar);
-                eprintln!(
-                    "    C_1 recreated bytes: {:?}",
-                    self.group.element_to_bytes(&c1_recreated)
-                );
-                eprintln!(
-                    "    C_1 == recreated? {}",
-                    commitments[1] == c1_recreated
-                );
-
-                // Now manually compute: a0*g + a1*g (should equal C_0 + C_1)
-                let manual_from_scalars =
-                    self.group.mul(&c0_recreated, &c1_recreated);
-                eprintln!(
-                    "    a0*g + a1*g bytes: {:?}",
-                    self.group.element_to_bytes(&manual_from_scalars)
-                );
-
-                // Now compute (a0 + a1) * g and compare
-                let a0_plus_a1_scalar = a0_scalar + a1_scalar;
-                eprintln!(
-                    "    a0_plus_a1_scalar bytes: {:?}",
-                    self.group.scalar_to_bytes(&a0_plus_a1_scalar)
-                );
-                eprintln!(
-                    "    p1_scalar bytes: {:?}",
-                    self.group.scalar_to_bytes(&p1_scalar)
-                );
-                eprintln!(
-                    "    a0_plus_a1_scalar == p1_scalar? {}",
-                    a0_plus_a1_scalar == p1_scalar
-                );
-                eprintln!("    a0_scalar + a1_scalar (as BigInt back):");
-                let a0_bi = BigInt::from_bytes_be(
-                    num_bigint::Sign::Plus,
-                    &self.group.scalar_to_bytes(&a0_scalar),
-                );
-                let a1_bi = BigInt::from_bytes_be(
-                    num_bigint::Sign::Plus,
-                    &self.group.scalar_to_bytes(&a1_scalar),
-                );
-                let sum_bi = &a0_bi + &a1_bi;
-                eprintln!("      a0 (as BigInt) = {}", a0_bi);
-                eprintln!("      a1 (as BigInt) = {}", a1_bi);
-                eprintln!("      a0 + a1 (as BigInt) = {}", sum_bi);
-                eprintln!("      p1_mod (as BigInt) = {}", p1_mod);
-                eprintln!(
-                    "      (a0 + a1) mod group_order = {}",
-                    sum_bi % &group_order_bigint
-                );
-                let combined =
-                    self.group.exp(&subgroup_gen, &a0_plus_a1_scalar);
-                eprintln!(
-                    "    (a0+a1)*g bytes: {:?}",
-                    self.group.element_to_bytes(&combined)
-                );
-
-                // Check if p1_scalar equals a0_plus_a1_scalar
-                eprintln!(
-                    "    p1_scalar == a0_plus_a1? {}",
-                    p1_scalar == a0_plus_a1_scalar
-                );
-
-                assert_eq!(
-                    gp1, manual_sum,
-                    "g^P(1) should equal sum of commitments"
-                );
-                assert_eq!(
-                    manual_sum, x_val,
-                    "X_i should equal sum of commitments"
-                );
-            }
-
             // Calculate Y_i = secret_share * y_i (encrypted share)
             let encrypted_secret_share = self.group.exp(pubkey, &secret_share);
             shares.insert(pubkey_bytes.clone(), encrypted_secret_share);
@@ -1488,21 +1241,6 @@ impl Participant<Secp256k1Group> {
             // Update challenge hash - use element_to_bytes() for EC points
             let a1 = dleq.get_a1();
             let a2 = dleq.get_a2();
-
-            // Debug: print what's being hashed for first participant
-            if idx == 0 {
-                eprintln!("DEBUG: Distribution hashing - Participant 1:");
-                eprintln!(
-                    "  X_i bytes: {:?}",
-                    self.group.element_to_bytes(&x_val)
-                );
-                eprintln!(
-                    "  Y_i bytes: {:?}",
-                    self.group.element_to_bytes(&encrypted_secret_share)
-                );
-                eprintln!("  a1 bytes: {:?}", self.group.element_to_bytes(&a1));
-                eprintln!("  a2 bytes: {:?}", self.group.element_to_bytes(&a2));
-            }
 
             challenge_hasher.update(self.group.element_to_bytes(&x_val));
             challenge_hasher
@@ -1526,28 +1264,6 @@ impl Participant<Secp256k1Group> {
             let alpha_c = self.group.scalar_mul(alpha, &challenge);
             let w_i = dleq_w.get(&pubkey_bytes).unwrap();
             let response = self.group.scalar_sub(w_i, &alpha_c);
-
-            // Debug: verify response computation for first participant
-            if responses.is_empty() {
-                eprintln!("DEBUG: Response computation:");
-                eprintln!("  w bytes: {:?}", self.group.scalar_to_bytes(w_i));
-                eprintln!(
-                    "  alpha bytes: {:?}",
-                    self.group.scalar_to_bytes(alpha)
-                );
-                eprintln!(
-                    "  challenge bytes: {:?}",
-                    self.group.scalar_to_bytes(&challenge)
-                );
-                eprintln!(
-                    "  alpha*c bytes: {:?}",
-                    self.group.scalar_to_bytes(&alpha_c)
-                );
-                eprintln!(
-                    "  response (=w-alpha*c) bytes: {:?}",
-                    self.group.scalar_to_bytes(&response)
-                );
-            }
 
             responses.insert(pubkey_bytes, response);
         }
@@ -1722,9 +1438,7 @@ impl Participant<Secp256k1Group> {
         let mut challenge_hasher = Sha256::new();
 
         // Verify each participant's encrypted share and accumulate hash
-        for (idx, publickey) in
-            distribute_sharesbox.publickeys.iter().enumerate()
-        {
+        for publickey in distribute_sharesbox.publickeys.iter() {
             let publickey_bytes = self.group.element_to_bytes(publickey);
             let position = distribute_sharesbox.positions.get(&publickey_bytes);
             let response = distribute_sharesbox.responses.get(&publickey_bytes);
@@ -1735,7 +1449,6 @@ impl Participant<Secp256k1Group> {
                 || response.is_none()
                 || encrypted_share.is_none()
             {
-                eprintln!("DEBUG: Participant {} missing data", idx + 1);
                 return false;
             }
 
@@ -1770,90 +1483,18 @@ impl Participant<Secp256k1Group> {
             let a2 = self.group.mul(&y_r, &y_c);
 
             // Update hash with X_i, Y_i, a_1, a_2 using element_to_bytes()
-
-            // Debug: print what's being hashed for first participant
-            if idx == 0 {
-                eprintln!("DEBUG: Verification hashing - Participant 1:");
-                eprintln!(
-                    "  X_i bytes: {:?}",
-                    self.group.element_to_bytes(&x_val)
-                );
-                eprintln!(
-                    "  Y_i bytes: {:?}",
-                    self.group.element_to_bytes(encrypted_share)
-                );
-                eprintln!("  a1 bytes: {:?}", self.group.element_to_bytes(&a1));
-                eprintln!("  a2 bytes: {:?}", self.group.element_to_bytes(&a2));
-            }
-
             challenge_hasher.update(self.group.element_to_bytes(&x_val));
             challenge_hasher
                 .update(self.group.element_to_bytes(encrypted_share));
             challenge_hasher.update(self.group.element_to_bytes(&a1));
             challenge_hasher.update(self.group.element_to_bytes(&a2));
-
-            // Debug: print detailed info for first participant
-            if idx == 0 {
-                eprintln!("DEBUG: Verification - Participant 1:");
-                eprintln!(
-                    "  X_i bytes: {:?}",
-                    self.group.element_to_bytes(&x_val)
-                );
-                eprintln!(
-                    "  Y_i bytes: {:?}",
-                    self.group.element_to_bytes(encrypted_share)
-                );
-                eprintln!(
-                    "  response bytes: {:?}",
-                    self.group.scalar_to_bytes(response)
-                );
-                eprintln!(
-                    "  challenge bytes: {:?}",
-                    self.group.scalar_to_bytes(&distribute_sharesbox.challenge)
-                );
-                eprintln!(
-                    "  g^r bytes: {:?}",
-                    self.group.element_to_bytes(&g_r)
-                );
-                eprintln!(
-                    "  X_i^c bytes: {:?}",
-                    self.group.element_to_bytes(&x_c)
-                );
-                eprintln!(
-                    "  a1 (=g^r+X_i^c) bytes: {:?}",
-                    self.group.element_to_bytes(&a1)
-                );
-                eprintln!("  a2 bytes: {:?}", self.group.element_to_bytes(&a2));
-                eprintln!(
-                    "  subgroup_gen bytes: {:?}",
-                    self.group.element_to_bytes(&subgroup_gen)
-                );
-
-                // Debug: what was hashed during distribution?
-                eprintln!("DEBUG: During distribution, a1 was:");
-                eprintln!("  This should equal g^w, let's verify:");
-                // We need to find the w value for this participant
-                // But we don't have it in the verification function
-            }
         }
 
         // Calculate final challenge and check if it matches
         let challenge_hash = challenge_hasher.finalize();
         let computed_challenge = self.group.hash_to_scalar(&challenge_hash);
 
-        let result = computed_challenge == distribute_sharesbox.challenge;
-        if !result {
-            eprintln!("DEBUG: Challenge mismatch!");
-            eprintln!(
-                "Stored challenge: {:?}",
-                self.group.scalar_to_bytes(&distribute_sharesbox.challenge)
-            );
-            eprintln!(
-                "Computed challenge: {:?}",
-                self.group.scalar_to_bytes(&computed_challenge)
-            );
-        }
-        result
+        computed_challenge == distribute_sharesbox.challenge
     }
 
     /// Reconstruct secret from shares (Secp256k1Group implementation).
@@ -2012,7 +1653,8 @@ impl Participant<Ristretto255Group> {
         let mut shares: HashMap<Vec<u8>, RistrettoPoint> = HashMap::new();
         let mut challenge_hasher = Sha256::new();
 
-        let mut sampling_points: HashMap<Vec<u8>, RistrettoScalar> = HashMap::new();
+        let mut sampling_points: HashMap<Vec<u8>, RistrettoScalar> =
+            HashMap::new();
         let mut dleq_w: HashMap<Vec<u8>, RistrettoScalar> = HashMap::new();
         let mut position: i64 = 1;
 
@@ -2024,17 +1666,6 @@ impl Participant<Ristretto255Group> {
             let coeff = Ristretto255Group::bigint_to_scalar(coeff_bigint);
             let commitment = self.group.exp(&subgroup_gen, &coeff);
             commitments.push(commitment);
-
-            // Debug: print first few commitments
-            if j < 3 {
-                eprintln!(
-                    "DEBUG [Ristretto255] C_{} = g^a_{}:",
-                    j, j
-                );
-                eprintln!("  a_{} (BigInt): {}", j, coeff_bigint);
-                eprintln!("  a_{} (Scalar bytes): {:?}", j, self.group.scalar_to_bytes(&coeff));
-                eprintln!("  C_{} bytes: {:?}", j, self.group.element_to_bytes(&commitment));
-            }
         }
 
         // Calculate encrypted shares for each participant
@@ -2048,7 +1679,8 @@ impl Participant<Ristretto255Group> {
             // CRITICAL: Must take mod order BEFORE converting to Scalar
             let secret_share_mod = &secret_share_bigint % &group_order_bigint;
             // Convert to Ristretto Scalar (handles endianness)
-            let secret_share = Ristretto255Group::bigint_to_scalar(&secret_share_mod);
+            let secret_share =
+                Ristretto255Group::bigint_to_scalar(&secret_share_mod);
             sampling_points.insert(pubkey_bytes.clone(), secret_share);
             dleq_w.insert(pubkey_bytes.clone(), w);
 
@@ -2056,26 +1688,11 @@ impl Participant<Ristretto255Group> {
             let mut x_val = self.group.identity();
             let mut exponent = RistrettoScalar::ONE;
 
-            // Debug: trace X_i computation for first participant
-            if position == 1 {
-                eprintln!("DEBUG [Ristretto255] Computing X_i for position 1:");
-            }
-
             for j in 0..threshold {
                 // C_j^(i^j) in EC notation = (i^j) * C_j (scalar multiplication)
                 let c_j_pow =
                     self.group.exp(&commitments[j as usize], &exponent);
                 x_val = self.group.mul(&x_val, &c_j_pow);
-
-                // Debug: trace each step for first participant
-                if position == 1 {
-                    eprintln!("  j={}, exponent={:?}, C_j^exp={:?}, x_val so far={:?}",
-                        j,
-                        self.group.scalar_to_bytes(&exponent),
-                        self.group.element_to_bytes(&c_j_pow),
-                        self.group.element_to_bytes(&x_val)
-                    );
-                }
 
                 // exponent *= position (mod order)
                 let pos_scalar = RistrettoScalar::from(position as u64);
@@ -2101,47 +1718,6 @@ impl Participant<Ristretto255Group> {
             let a1 = dleq.get_a1();
             let a2 = dleq.get_a2();
 
-            // Debug: print hash inputs for first participant
-            if position == 1 {
-                eprintln!("DEBUG [Ristretto255 Distribute]: Participant 1 hash inputs:");
-                eprintln!("  X_i: {:?}", self.group.element_to_bytes(&x_val));
-                eprintln!(
-                    "  Y_i: {:?}",
-                    self.group.element_to_bytes(&encrypted_secret_share)
-                );
-                eprintln!("  a1: {:?}", self.group.element_to_bytes(&a1));
-                eprintln!("  a2: {:?}", self.group.element_to_bytes(&a2));
-                eprintln!("  w (witness): {:?}", self.group.scalar_to_bytes(&w));
-                eprintln!(
-                    "  alpha (secret_share): {:?}",
-                    self.group.scalar_to_bytes(&secret_share)
-                );
-                eprintln!(
-                    "  subgroup_gen: {:?}",
-                    self.group.element_to_bytes(&subgroup_gen)
-                );
-                // Verify X_i = g^alpha
-                let x_i_expected = self.group.exp(&subgroup_gen, &secret_share);
-                eprintln!(
-                    "  X_i expected (g^alpha): {:?}",
-                    self.group.element_to_bytes(&x_i_expected)
-                );
-                eprintln!("  X_i matches g^alpha: {}", x_val == x_i_expected);
-
-                // Also verify: X_i from commitments should equal g^P(i)
-                // P(1) = a_0 + a_1 + a_2 (sum of coefficients for position 1)
-                let p1_sum: BigInt = polynomial.coefficients.iter().cloned().sum();
-                let p1_mod = &p1_sum % &group_order_bigint;
-                let p1_scalar = Ristretto255Group::bigint_to_scalar(&p1_mod);
-                let x_i_from_sum = self.group.exp(&subgroup_gen, &p1_scalar);
-                eprintln!("  P(1) sum BigInt: {}", p1_sum);
-                eprintln!("  P(1) mod order: {}", p1_mod);
-                eprintln!("  P(1) as Scalar: {:?}", self.group.scalar_to_bytes(&p1_scalar));
-                eprintln!("  g^P(1) from sum: {:?}", self.group.element_to_bytes(&x_i_from_sum));
-                eprintln!("  X_i == g^P(1) from sum: {}", x_val == x_i_from_sum);
-                eprintln!("  secret_share == P(1) Scalar: {}", secret_share == p1_scalar);
-            }
-
             challenge_hasher.update(self.group.element_to_bytes(&x_val));
             challenge_hasher
                 .update(self.group.element_to_bytes(&encrypted_secret_share));
@@ -2157,22 +1733,12 @@ impl Participant<Ristretto255Group> {
 
         // Compute responses: r_i = w - alpha_i * c
         let mut responses: HashMap<Vec<u8>, RistrettoScalar> = HashMap::new();
-        for (idx, pubkey) in publickeys.iter().enumerate() {
+        for pubkey in publickeys {
             let pubkey_bytes = self.group.element_to_bytes(pubkey);
             let alpha = sampling_points.get(&pubkey_bytes).unwrap();
             let alpha_c = self.group.scalar_mul(alpha, &challenge);
             let w_i = dleq_w.get(&pubkey_bytes).unwrap();
             let response = self.group.scalar_sub(w_i, &alpha_c);
-
-            // Debug: print response computation for first participant
-            if idx == 0 {
-                eprintln!("DEBUG [Ristretto255 Distribute] Response computation for Participant 1:");
-                eprintln!("  w: {:?}", self.group.scalar_to_bytes(w_i));
-                eprintln!("  alpha: {:?}", self.group.scalar_to_bytes(alpha));
-                eprintln!("  challenge: {:?}", self.group.scalar_to_bytes(&challenge));
-                eprintln!("  alpha*c: {:?}", self.group.scalar_to_bytes(&alpha_c));
-                eprintln!("  r (= w - alpha*c): {:?}", self.group.scalar_to_bytes(&response));
-            }
 
             responses.insert(pubkey_bytes, response);
         }
@@ -2186,8 +1752,9 @@ impl Participant<Ristretto255Group> {
         let sha256_hash = Sha256::digest(self.group.element_to_bytes(&g_s));
         // Convert hash to BigUint and reduce modulo group order
         let hash_biguint = BigUint::from_bytes_be(&sha256_hash[..]);
-        let curve_order_bigint =
-            BigUint::from_bytes_be(&self.group.order_as_bigint().to_bytes_be().1);
+        let curve_order_bigint = BigUint::from_bytes_be(
+            &self.group.order_as_bigint().to_bytes_be().1,
+        );
         let hash_reduced = hash_biguint % curve_order_bigint;
         let u = secret.to_biguint().unwrap() ^ hash_reduced;
 
@@ -2224,7 +1791,8 @@ impl Participant<Ristretto255Group> {
 
         // Get encrypted share from distribution box (serialize key for HashMap lookup)
         let public_key_bytes = self.group.element_to_bytes(&public_key);
-        let encrypted_secret_share = shares_box.shares.get(&public_key_bytes)?;
+        let encrypted_secret_share =
+            shares_box.shares.get(&public_key_bytes)?;
 
         // Decryption: S_i = Y_i^(1/x_i) using scalar_inverse
         let privkey_inverse = self.group.scalar_inverse(private_key)?;
@@ -2375,39 +1943,6 @@ impl Participant<Ristretto255Group> {
                 .exp(encrypted_share, &distribute_sharesbox.challenge);
             let a2 = self.group.mul(&y_r, &y_c);
 
-            // Debug: print hash inputs for first participant
-            if position == 1 {
-                eprintln!("DEBUG [Ristretto255 Verify]: Participant 1 hash inputs:");
-                eprintln!("  X_i: {:?}", self.group.element_to_bytes(&x_val));
-                eprintln!(
-                    "  Y_i: {:?}",
-                    self.group.element_to_bytes(encrypted_share)
-                );
-                eprintln!("  a1: {:?}", self.group.element_to_bytes(&a1));
-                eprintln!("  a2: {:?}", self.group.element_to_bytes(&a2));
-                eprintln!(
-                    "  stored challenge: {:?}",
-                    self.group.scalar_to_bytes(&distribute_sharesbox.challenge)
-                );
-                eprintln!("  response: {:?}", self.group.scalar_to_bytes(response));
-                eprintln!(
-                    "  subgroup_gen: {:?}",
-                    self.group.element_to_bytes(&subgroup_gen)
-                );
-                // Compute g^r separately for debugging
-                let g_r_debug = self.group.exp(&subgroup_gen, response);
-                let x_c_debug = self.group.exp(&x_val, &distribute_sharesbox.challenge);
-                eprintln!("  g^r: {:?}", self.group.element_to_bytes(&g_r_debug));
-                eprintln!("  X_i^c: {:?}", self.group.element_to_bytes(&x_c_debug));
-
-                // Verify: compute r + alpha*c and check if it equals w
-                // But we don't have w and alpha here... let me just verify the math differently
-                // g^r * X^c should equal g^w if r = w - alpha*c and X = g^alpha
-                eprintln!("  Verifying: a1 (g^r * X^c) should equal g^w from distribution");
-                eprintln!("  Distribution a1 was: [76, 96, 148, 75, ...]");
-                eprintln!("  Verification a1 is: {:?}", self.group.element_to_bytes(&a1));
-            }
-
             // Update hash with X_i, Y_i, a_1, a_2 using element_to_bytes()
             challenge_hasher.update(self.group.element_to_bytes(&x_val));
             challenge_hasher
@@ -2420,19 +1955,7 @@ impl Participant<Ristretto255Group> {
         let challenge_hash = challenge_hasher.finalize();
         let computed_challenge = self.group.hash_to_scalar(&challenge_hash);
 
-        let result = computed_challenge == distribute_sharesbox.challenge;
-        if !result {
-            eprintln!("DEBUG [Ristretto255]: Challenge mismatch!");
-            eprintln!(
-                "Stored challenge: {:?}",
-                self.group.scalar_to_bytes(&distribute_sharesbox.challenge)
-            );
-            eprintln!(
-                "Computed challenge: {:?}",
-                self.group.scalar_to_bytes(&computed_challenge)
-            );
-        }
-        result
+        computed_challenge == distribute_sharesbox.challenge
     }
 
     /// Reconstruct secret from shares (Ristretto255Group implementation).
@@ -2474,7 +1997,9 @@ impl Participant<Ristretto255Group> {
         let factors: Vec<RistrettoPoint> = shares_slice
             .par_iter()
             .map(|(position, share)| {
-                self.compute_lagrange_factor_ristretto(*position, share, &values)
+                self.compute_lagrange_factor_ristretto(
+                    *position, share, &values,
+                )
             })
             .collect();
 
@@ -2488,8 +2013,9 @@ impl Participant<Ristretto255Group> {
             Sha256::digest(self.group.element_to_bytes(&final_secret));
         // Convert hash to BigUint and reduce modulo group order
         let hash_biguint = BigUint::from_bytes_be(&secret_hash[..]);
-        let curve_order_bigint =
-            BigUint::from_bytes_be(&self.group.order_as_bigint().to_bytes_be().1);
+        let curve_order_bigint = BigUint::from_bytes_be(
+            &self.group.order_as_bigint().to_bytes_be().1,
+        );
         let hash_reduced = hash_biguint % curve_order_bigint;
         let decrypted_secret =
             hash_reduced ^ distribute_share_box.U.to_biguint().unwrap();

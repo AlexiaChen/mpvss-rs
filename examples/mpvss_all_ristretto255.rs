@@ -2,9 +2,9 @@
 //
 // Code is licensed under MIT Apache Dual License
 
+use mpvss_rs::Participant;
 use mpvss_rs::group::Group;
 use mpvss_rs::groups::Ristretto255Group;
-use mpvss_rs::Participant;
 use mpvss_rs::{string_from_secret, string_to_secret};
 
 fn main() {

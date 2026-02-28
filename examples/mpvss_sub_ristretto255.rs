@@ -2,14 +2,15 @@
 //
 // Code is licensed under MIT Apache Dual License
 
+use mpvss_rs::Participant;
 use mpvss_rs::group::Group;
 use mpvss_rs::groups::Ristretto255Group;
-use mpvss_rs::Participant;
 use mpvss_rs::{string_from_secret, string_to_secret};
 
 fn main() {
     let group = Ristretto255Group::new();
-    let secret_message = String::from("Hello Sub MPVSS Example (Ristretto255).");
+    let secret_message =
+        String::from("Hello Sub MPVSS Example (Ristretto255).");
     let mut dealer = Participant::with_arc(group.clone());
     dealer.initialize();
     let mut p1 = Participant::with_arc(Ristretto255Group::new());
