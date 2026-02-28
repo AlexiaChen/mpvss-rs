@@ -40,6 +40,10 @@ pub use sharebox::{DistributionSharesBox, ShareBox};
 /// Type alias for Participant with Secp256k1Group (elliptic curve cryptography)
 pub type Secp256k1Participant = Participant<crate::groups::Secp256k1Group>;
 
+/// Type alias for Participant with Ristretto255Group (prime-order group over Curve25519)
+pub type Ristretto255Participant =
+    Participant<crate::groups::Ristretto255Group>;
+
 use num_bigint::{BigInt, BigUint, ToBigInt};
 
 pub fn string_to_secret(message: &str) -> BigInt {
