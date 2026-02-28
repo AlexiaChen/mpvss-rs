@@ -31,6 +31,13 @@ use k256::elliptic_curve::ff::PrimeField;
 
 use k256::{AffinePoint, Scalar};
 
+// Ristretto255-specific imports
+use crate::groups::Ristretto255Group;
+
+use curve25519_dalek::ristretto::RistrettoPoint;
+
+use curve25519_dalek::scalar::Scalar as RistrettoScalar;
+
 // Type aliases for convenience
 // Note: These are already defined in sharebox.rs but re-exported here for convenience
 
@@ -608,7 +615,8 @@ impl Participant<ModpGroup> {
                     (numerator.to_bigint().unwrap() * inv) % group_order_minus_1
                 }
                 None => {
-                    eprintln!("ERROR: Denominator has no inverse");
+                    // If denominator has no inverse, return identity element
+                    // This should not happen in normal operation with valid shares
                     BigInt::one()
                 }
             }
@@ -1949,6 +1957,584 @@ impl Participant<Secp256k1Group> {
 
         // λ = numerator * denominator^(-1)
         let lambda = lambda_num * lambda_den.invert().unwrap();
+
+        // Compute share^λ = λ * share (scalar multiplication)
+        let mut factor = self.group.exp(share, &lambda);
+
+        // Handle negative coefficients via point negation
+        if sign < 0
+            && let Some(negated) = self.group.element_inverse(&factor)
+        {
+            factor = negated;
+        }
+
+        factor
+    }
+}
+
+// ============================================================================
+// Ristretto255Group-Specific Implementation
+// ============================================================================
+
+impl Participant<Ristretto255Group> {
+    /// Distribute a secret among participants (full implementation for Ristretto255Group).
+    ///
+    /// # Parameters
+    /// - `secret`: The value to be shared (as BigInt for cross-group compatibility)
+    /// - `publickeys`: Array of public keys (Ristretto points) of each participant
+    /// - `threshold`: Number of shares needed for reconstruction
+    ///
+    /// Returns a `DistributionSharesBox` containing encrypted shares and DLEQ proofs
+    pub fn distribute_secret(
+        &mut self,
+        secret: &BigInt,
+        publickeys: &[RistrettoPoint],
+        threshold: u32,
+    ) -> DistributionSharesBox<Ristretto255Group> {
+        assert!(threshold <= publickeys.len() as u32);
+
+        // Group generators
+        let subgroup_gen = self.group.subgroup_generator();
+        let main_gen = self.group.generator();
+        let _group_order = self.group.order(); // Stored for API compatibility
+
+        // Generate random polynomial (coefficients are BigInt, converted to Scalar later)
+        let mut polynomial = Polynomial::new();
+        let group_order_bigint = self.group.order_as_bigint().clone();
+        polynomial.init((threshold - 1) as i32, &group_order_bigint);
+
+        // Generate random witness w (scalar)
+        let w = self.group.generate_private_key();
+
+        // Data structures - use Vec<u8> keys (serialized points) since RistrettoPoint doesn't implement Hash
+        let mut commitments: Vec<RistrettoPoint> = Vec::new();
+        let mut positions: HashMap<Vec<u8>, i64> = HashMap::new();
+        let mut shares: HashMap<Vec<u8>, RistrettoPoint> = HashMap::new();
+        let mut challenge_hasher = Sha256::new();
+
+        let mut sampling_points: HashMap<Vec<u8>, RistrettoScalar> = HashMap::new();
+        let mut dleq_w: HashMap<Vec<u8>, RistrettoScalar> = HashMap::new();
+        let mut position: i64 = 1;
+
+        // Calculate commitments C_j = a_j * g (scalar multiplication)
+        for j in 0..threshold {
+            let coeff_bigint = &polynomial.coefficients[j as usize];
+            // Convert BigInt coefficient to Ristretto Scalar
+            // CRITICAL: curve25519-dalek uses little-endian, num_bigint uses big-endian
+            let coeff = Ristretto255Group::bigint_to_scalar(coeff_bigint);
+            let commitment = self.group.exp(&subgroup_gen, &coeff);
+            commitments.push(commitment);
+
+            // Debug: print first few commitments
+            if j < 3 {
+                eprintln!(
+                    "DEBUG [Ristretto255] C_{} = g^a_{}:",
+                    j, j
+                );
+                eprintln!("  a_{} (BigInt): {}", j, coeff_bigint);
+                eprintln!("  a_{} (Scalar bytes): {:?}", j, self.group.scalar_to_bytes(&coeff));
+                eprintln!("  C_{} bytes: {:?}", j, self.group.element_to_bytes(&commitment));
+            }
+        }
+
+        // Calculate encrypted shares for each participant
+        for pubkey in publickeys {
+            let pubkey_bytes = self.group.element_to_bytes(pubkey);
+            positions.insert(pubkey_bytes.clone(), position);
+
+            // P(position) as Scalar
+            let pos_scalar = BigInt::from(position);
+            let secret_share_bigint = polynomial.get_value(&pos_scalar);
+            // CRITICAL: Must take mod order BEFORE converting to Scalar
+            let secret_share_mod = &secret_share_bigint % &group_order_bigint;
+            // Convert to Ristretto Scalar (handles endianness)
+            let secret_share = Ristretto255Group::bigint_to_scalar(&secret_share_mod);
+            sampling_points.insert(pubkey_bytes.clone(), secret_share);
+            dleq_w.insert(pubkey_bytes.clone(), w);
+
+            // Calculate X_i = Σ_j (position^j) * C_j (using EC operations)
+            let mut x_val = self.group.identity();
+            let mut exponent = RistrettoScalar::ONE;
+
+            // Debug: trace X_i computation for first participant
+            if position == 1 {
+                eprintln!("DEBUG [Ristretto255] Computing X_i for position 1:");
+            }
+
+            for j in 0..threshold {
+                // C_j^(i^j) in EC notation = (i^j) * C_j (scalar multiplication)
+                let c_j_pow =
+                    self.group.exp(&commitments[j as usize], &exponent);
+                x_val = self.group.mul(&x_val, &c_j_pow);
+
+                // Debug: trace each step for first participant
+                if position == 1 {
+                    eprintln!("  j={}, exponent={:?}, C_j^exp={:?}, x_val so far={:?}",
+                        j,
+                        self.group.scalar_to_bytes(&exponent),
+                        self.group.element_to_bytes(&c_j_pow),
+                        self.group.element_to_bytes(&x_val)
+                    );
+                }
+
+                // exponent *= position (mod order)
+                let pos_scalar = RistrettoScalar::from(position as u64);
+                exponent = self.group.scalar_mul(&exponent, &pos_scalar);
+            }
+
+            // Calculate Y_i = secret_share * y_i (encrypted share)
+            let encrypted_secret_share = self.group.exp(pubkey, &secret_share);
+            shares.insert(pubkey_bytes.clone(), encrypted_secret_share);
+
+            // Generate DLEQ proof: DLEQ(g, X_i, y_i, Y_i)
+            let mut dleq = DLEQ::new(self.group.clone());
+            dleq.init(
+                subgroup_gen,
+                x_val,
+                *pubkey,
+                encrypted_secret_share,
+                secret_share,
+                w,
+            );
+
+            // Update challenge hash - use element_to_bytes() for EC points
+            let a1 = dleq.get_a1();
+            let a2 = dleq.get_a2();
+
+            // Debug: print hash inputs for first participant
+            if position == 1 {
+                eprintln!("DEBUG [Ristretto255 Distribute]: Participant 1 hash inputs:");
+                eprintln!("  X_i: {:?}", self.group.element_to_bytes(&x_val));
+                eprintln!(
+                    "  Y_i: {:?}",
+                    self.group.element_to_bytes(&encrypted_secret_share)
+                );
+                eprintln!("  a1: {:?}", self.group.element_to_bytes(&a1));
+                eprintln!("  a2: {:?}", self.group.element_to_bytes(&a2));
+                eprintln!("  w (witness): {:?}", self.group.scalar_to_bytes(&w));
+                eprintln!(
+                    "  alpha (secret_share): {:?}",
+                    self.group.scalar_to_bytes(&secret_share)
+                );
+                eprintln!(
+                    "  subgroup_gen: {:?}",
+                    self.group.element_to_bytes(&subgroup_gen)
+                );
+                // Verify X_i = g^alpha
+                let x_i_expected = self.group.exp(&subgroup_gen, &secret_share);
+                eprintln!(
+                    "  X_i expected (g^alpha): {:?}",
+                    self.group.element_to_bytes(&x_i_expected)
+                );
+                eprintln!("  X_i matches g^alpha: {}", x_val == x_i_expected);
+
+                // Also verify: X_i from commitments should equal g^P(i)
+                // P(1) = a_0 + a_1 + a_2 (sum of coefficients for position 1)
+                let p1_sum: BigInt = polynomial.coefficients.iter().cloned().sum();
+                let p1_mod = &p1_sum % &group_order_bigint;
+                let p1_scalar = Ristretto255Group::bigint_to_scalar(&p1_mod);
+                let x_i_from_sum = self.group.exp(&subgroup_gen, &p1_scalar);
+                eprintln!("  P(1) sum BigInt: {}", p1_sum);
+                eprintln!("  P(1) mod order: {}", p1_mod);
+                eprintln!("  P(1) as Scalar: {:?}", self.group.scalar_to_bytes(&p1_scalar));
+                eprintln!("  g^P(1) from sum: {:?}", self.group.element_to_bytes(&x_i_from_sum));
+                eprintln!("  X_i == g^P(1) from sum: {}", x_val == x_i_from_sum);
+                eprintln!("  secret_share == P(1) Scalar: {}", secret_share == p1_scalar);
+            }
+
+            challenge_hasher.update(self.group.element_to_bytes(&x_val));
+            challenge_hasher
+                .update(self.group.element_to_bytes(&encrypted_secret_share));
+            challenge_hasher.update(self.group.element_to_bytes(&a1));
+            challenge_hasher.update(self.group.element_to_bytes(&a2));
+
+            position += 1;
+        }
+
+        // Compute common challenge
+        let challenge_hash = challenge_hasher.finalize();
+        let challenge = self.group.hash_to_scalar(&challenge_hash);
+
+        // Compute responses: r_i = w - alpha_i * c
+        let mut responses: HashMap<Vec<u8>, RistrettoScalar> = HashMap::new();
+        for (idx, pubkey) in publickeys.iter().enumerate() {
+            let pubkey_bytes = self.group.element_to_bytes(pubkey);
+            let alpha = sampling_points.get(&pubkey_bytes).unwrap();
+            let alpha_c = self.group.scalar_mul(alpha, &challenge);
+            let w_i = dleq_w.get(&pubkey_bytes).unwrap();
+            let response = self.group.scalar_sub(w_i, &alpha_c);
+
+            // Debug: print response computation for first participant
+            if idx == 0 {
+                eprintln!("DEBUG [Ristretto255 Distribute] Response computation for Participant 1:");
+                eprintln!("  w: {:?}", self.group.scalar_to_bytes(w_i));
+                eprintln!("  alpha: {:?}", self.group.scalar_to_bytes(alpha));
+                eprintln!("  challenge: {:?}", self.group.scalar_to_bytes(&challenge));
+                eprintln!("  alpha*c: {:?}", self.group.scalar_to_bytes(&alpha_c));
+                eprintln!("  r (= w - alpha*c): {:?}", self.group.scalar_to_bytes(&response));
+            }
+
+            responses.insert(pubkey_bytes, response);
+        }
+
+        // Compute U = secret XOR H(G^s)
+        let s_bigint = polynomial.get_value(&BigInt::zero());
+        let s = Ristretto255Group::bigint_to_scalar(&s_bigint);
+        let g_s = self.group.exp(&main_gen, &s);
+
+        // Hash the EC point to bytes
+        let sha256_hash = Sha256::digest(self.group.element_to_bytes(&g_s));
+        // Convert hash to BigUint and reduce modulo group order
+        let hash_biguint = BigUint::from_bytes_be(&sha256_hash[..]);
+        let curve_order_bigint =
+            BigUint::from_bytes_be(&self.group.order_as_bigint().to_bytes_be().1);
+        let hash_reduced = hash_biguint % curve_order_bigint;
+        let u = secret.to_biguint().unwrap() ^ hash_reduced;
+
+        // Build shares box
+        let mut shares_box = DistributionSharesBox::new();
+        shares_box.init(
+            &commitments,
+            positions,
+            shares,
+            publickeys,
+            &challenge,
+            responses,
+            &u.to_bigint().unwrap(),
+        );
+        shares_box
+    }
+
+    /// Extract a secret share from the distribution box (Ristretto255Group implementation).
+    ///
+    /// # Parameters
+    /// - `shares_box`: The distribution shares box from the dealer
+    /// - `private_key`: The participant's private key (Scalar)
+    /// - `w`: Random witness for DLEQ proof (Scalar)
+    pub fn extract_secret_share(
+        &self,
+        shares_box: &DistributionSharesBox<Ristretto255Group>,
+        private_key: &RistrettoScalar,
+        w: &RistrettoScalar,
+    ) -> Option<ShareBox<Ristretto255Group>> {
+        let main_gen = self.group.generator();
+
+        // Generate public key from private key using group method
+        let public_key = self.group.generate_public_key(private_key);
+
+        // Get encrypted share from distribution box (serialize key for HashMap lookup)
+        let public_key_bytes = self.group.element_to_bytes(&public_key);
+        let encrypted_secret_share = shares_box.shares.get(&public_key_bytes)?;
+
+        // Decryption: S_i = Y_i^(1/x_i) using scalar_inverse
+        let privkey_inverse = self.group.scalar_inverse(private_key)?;
+        let decrypted_share =
+            self.group.exp(encrypted_secret_share, &privkey_inverse);
+
+        // Generate DLEQ proof: DLEQ(G, publickey, decrypted_share, encrypted_secret_share)
+        let mut dleq = DLEQ::new(self.group.clone());
+        dleq.init(
+            main_gen,
+            public_key,
+            decrypted_share,
+            *encrypted_secret_share,
+            *private_key,
+            *w,
+        );
+
+        // Compute challenge using element_to_bytes() for EC points
+        let mut challenge_hasher = Sha256::new();
+        challenge_hasher.update(self.group.element_to_bytes(&public_key));
+        challenge_hasher
+            .update(self.group.element_to_bytes(encrypted_secret_share));
+
+        let a1 = dleq.get_a1();
+        let a2 = dleq.get_a2();
+        challenge_hasher.update(self.group.element_to_bytes(&a1));
+        challenge_hasher.update(self.group.element_to_bytes(&a2));
+
+        let challenge_hash = challenge_hasher.finalize();
+        let challenge = self.group.hash_to_scalar(&challenge_hash);
+        dleq.c = Some(challenge);
+
+        // Compute response using scalar arithmetic
+        let response = dleq.get_r()?;
+
+        // Build share box
+        let mut share_box = ShareBox::new();
+        share_box.init(public_key, decrypted_share, challenge, response);
+        Some(share_box)
+    }
+
+    /// Verify a decrypted share (Ristretto255Group implementation).
+    ///
+    /// # Parameters
+    /// - `sharebox`: The share box containing the decrypted share
+    /// - `distribution_sharebox`: The distribution shares box from the dealer
+    /// - `publickey`: The public key (Ristretto point) of the participant who created the share
+    pub fn verify_share(
+        &self,
+        sharebox: &ShareBox<Ristretto255Group>,
+        distribution_sharebox: &DistributionSharesBox<Ristretto255Group>,
+        publickey: &RistrettoPoint,
+    ) -> bool {
+        let main_gen = self.group.generator();
+
+        // Get encrypted share from distribution box (serialize key for HashMap lookup)
+        let publickey_bytes = self.group.element_to_bytes(publickey);
+        let encrypted_share =
+            match distribution_sharebox.shares.get(&publickey_bytes) {
+                Some(s) => s,
+                None => return false,
+            };
+
+        // Verify DLEQ proof using EC operations
+        // a_1 = r*G + c*publickey (point addition)
+        let g1_r = self.group.exp(&main_gen, &sharebox.response);
+        let h1_c = self.group.exp(publickey, &sharebox.challenge);
+        let a1_verify = self.group.mul(&g1_r, &h1_c);
+
+        // a_2 = r*decrypted_share + c*encrypted_share
+        let g2_r = self.group.exp(&sharebox.share, &sharebox.response);
+        let h2_c = self.group.exp(encrypted_share, &sharebox.challenge);
+        let a2_verify = self.group.mul(&g2_r, &h2_c);
+
+        // Compute challenge hash using element_to_bytes() for EC points
+        let mut challenge_hasher = Sha256::new();
+        challenge_hasher.update(self.group.element_to_bytes(publickey));
+        challenge_hasher.update(self.group.element_to_bytes(encrypted_share));
+        challenge_hasher.update(self.group.element_to_bytes(&a1_verify));
+        challenge_hasher.update(self.group.element_to_bytes(&a2_verify));
+
+        let challenge_hash = challenge_hasher.finalize();
+        let challenge_computed = self.group.hash_to_scalar(&challenge_hash);
+
+        challenge_computed == sharebox.challenge
+    }
+
+    /// Verify distribution shares box (Ristretto255Group implementation).
+    ///
+    /// Verifies that all encrypted shares are consistent with the commitments.
+    /// This is the public verifiability part of PVSS - anyone can verify the dealer
+    /// didn't cheat.
+    ///
+    /// # Parameters
+    /// - `distribute_sharesbox`: The distribution shares box to verify
+    ///
+    /// # Returns
+    /// `true` if the distribution is valid, `false` otherwise
+    pub fn verify_distribution_shares(
+        &self,
+        distribute_sharesbox: &DistributionSharesBox<Ristretto255Group>,
+    ) -> bool {
+        let subgroup_gen = self.group.subgroup_generator();
+        let mut challenge_hasher = Sha256::new();
+
+        // Verify each participant's encrypted share and accumulate hash
+        for publickey in &distribute_sharesbox.publickeys {
+            let publickey_bytes = self.group.element_to_bytes(publickey);
+            let position = distribute_sharesbox.positions.get(&publickey_bytes);
+            let response = distribute_sharesbox.responses.get(&publickey_bytes);
+            let encrypted_share =
+                distribute_sharesbox.shares.get(&publickey_bytes);
+
+            if position.is_none()
+                || response.is_none()
+                || encrypted_share.is_none()
+            {
+                return false;
+            }
+
+            let position = *position.unwrap();
+            let response = response.unwrap();
+            let encrypted_share = encrypted_share.unwrap();
+
+            // Calculate X_i = Σ_j (position^j) * C_j using EC operations
+            let mut x_val = self.group.identity();
+            let mut exponent = RistrettoScalar::ONE;
+            for j in 0..distribute_sharesbox.commitments.len() {
+                // C_j^(position^j) in EC notation = (position^j) * C_j
+                let c_j_pow = self
+                    .group
+                    .exp(&distribute_sharesbox.commitments[j], &exponent);
+                x_val = self.group.mul(&x_val, &c_j_pow);
+                let pos_scalar = RistrettoScalar::from(position as u64);
+                exponent = self.group.scalar_mul(&exponent, &pos_scalar);
+            }
+
+            // Verify DLEQ proof for this participant
+            // DLEQ(g, X_i, y_i, Y_i): proves log_g(X_i) = log_{y_i}(Y_i)
+            // a_1 = r*g + c*X_i, a_2 = r*y_i + c*Y_i
+            let g_r = self.group.exp(&subgroup_gen, response);
+            let x_c = self.group.exp(&x_val, &distribute_sharesbox.challenge);
+            let a1 = self.group.mul(&g_r, &x_c);
+
+            let y_r = self.group.exp(publickey, response);
+            let y_c = self
+                .group
+                .exp(encrypted_share, &distribute_sharesbox.challenge);
+            let a2 = self.group.mul(&y_r, &y_c);
+
+            // Debug: print hash inputs for first participant
+            if position == 1 {
+                eprintln!("DEBUG [Ristretto255 Verify]: Participant 1 hash inputs:");
+                eprintln!("  X_i: {:?}", self.group.element_to_bytes(&x_val));
+                eprintln!(
+                    "  Y_i: {:?}",
+                    self.group.element_to_bytes(encrypted_share)
+                );
+                eprintln!("  a1: {:?}", self.group.element_to_bytes(&a1));
+                eprintln!("  a2: {:?}", self.group.element_to_bytes(&a2));
+                eprintln!(
+                    "  stored challenge: {:?}",
+                    self.group.scalar_to_bytes(&distribute_sharesbox.challenge)
+                );
+                eprintln!("  response: {:?}", self.group.scalar_to_bytes(response));
+                eprintln!(
+                    "  subgroup_gen: {:?}",
+                    self.group.element_to_bytes(&subgroup_gen)
+                );
+                // Compute g^r separately for debugging
+                let g_r_debug = self.group.exp(&subgroup_gen, response);
+                let x_c_debug = self.group.exp(&x_val, &distribute_sharesbox.challenge);
+                eprintln!("  g^r: {:?}", self.group.element_to_bytes(&g_r_debug));
+                eprintln!("  X_i^c: {:?}", self.group.element_to_bytes(&x_c_debug));
+
+                // Verify: compute r + alpha*c and check if it equals w
+                // But we don't have w and alpha here... let me just verify the math differently
+                // g^r * X^c should equal g^w if r = w - alpha*c and X = g^alpha
+                eprintln!("  Verifying: a1 (g^r * X^c) should equal g^w from distribution");
+                eprintln!("  Distribution a1 was: [76, 96, 148, 75, ...]");
+                eprintln!("  Verification a1 is: {:?}", self.group.element_to_bytes(&a1));
+            }
+
+            // Update hash with X_i, Y_i, a_1, a_2 using element_to_bytes()
+            challenge_hasher.update(self.group.element_to_bytes(&x_val));
+            challenge_hasher
+                .update(self.group.element_to_bytes(encrypted_share));
+            challenge_hasher.update(self.group.element_to_bytes(&a1));
+            challenge_hasher.update(self.group.element_to_bytes(&a2));
+        }
+
+        // Calculate final challenge and check if it matches
+        let challenge_hash = challenge_hasher.finalize();
+        let computed_challenge = self.group.hash_to_scalar(&challenge_hash);
+
+        let result = computed_challenge == distribute_sharesbox.challenge;
+        if !result {
+            eprintln!("DEBUG [Ristretto255]: Challenge mismatch!");
+            eprintln!(
+                "Stored challenge: {:?}",
+                self.group.scalar_to_bytes(&distribute_sharesbox.challenge)
+            );
+            eprintln!(
+                "Computed challenge: {:?}",
+                self.group.scalar_to_bytes(&computed_challenge)
+            );
+        }
+        result
+    }
+
+    /// Reconstruct secret from shares (Ristretto255Group implementation).
+    ///
+    /// # Parameters
+    /// - `share_boxes`: Array of share boxes from participants
+    /// - `distribute_share_box`: The distribution shares box from the dealer
+    ///
+    /// # Returns
+    /// `Some(secret)` if reconstruction succeeds, `None` otherwise
+    pub fn reconstruct(
+        &self,
+        share_boxes: &[ShareBox<Ristretto255Group>],
+        distribute_share_box: &DistributionSharesBox<Ristretto255Group>,
+    ) -> Option<BigInt> {
+        use rayon::prelude::*;
+
+        if share_boxes.len() < distribute_share_box.commitments.len() {
+            return None;
+        }
+
+        // Build position -> share map
+        let mut shares: HashMap<i64, RistrettoPoint> = HashMap::new();
+        for share_box in share_boxes.iter() {
+            let publickey_bytes =
+                self.group.element_to_bytes(&share_box.publickey);
+            let position =
+                distribute_share_box.positions.get(&publickey_bytes)?;
+            shares.insert(*position, share_box.share);
+        }
+
+        // Compute Lagrange factors and G^s = Σ S_i^λ_i
+        let secret = self.group.identity();
+        let values: Vec<i64> = shares.keys().copied().collect();
+        let shares_vec: Vec<(i64, RistrettoPoint)> =
+            shares.into_iter().collect();
+        let shares_slice = shares_vec.as_slice();
+
+        let factors: Vec<RistrettoPoint> = shares_slice
+            .par_iter()
+            .map(|(position, share)| {
+                self.compute_lagrange_factor_ristretto(*position, share, &values)
+            })
+            .collect();
+
+        // Add all factors using group.mul() (EC point addition)
+        let final_secret = factors
+            .into_iter()
+            .fold(secret, |acc, factor| self.group.mul(&acc, &factor));
+
+        // Reconstruct secret = H(G^s) XOR U
+        let secret_hash =
+            Sha256::digest(self.group.element_to_bytes(&final_secret));
+        // Convert hash to BigUint and reduce modulo group order
+        let hash_biguint = BigUint::from_bytes_be(&secret_hash[..]);
+        let curve_order_bigint =
+            BigUint::from_bytes_be(&self.group.order_as_bigint().to_bytes_be().1);
+        let hash_reduced = hash_biguint % curve_order_bigint;
+        let decrypted_secret =
+            hash_reduced ^ distribute_share_box.U.to_biguint().unwrap();
+
+        Some(decrypted_secret.to_bigint().unwrap())
+    }
+
+    /// Compute Lagrange factor for secret reconstruction (Ristretto255Group implementation).
+    ///
+    /// This uses pure Scalar arithmetic to avoid BigInt/Scalar conversion issues.
+    fn compute_lagrange_factor_ristretto(
+        &self,
+        position: i64,
+        share: &RistrettoPoint,
+        values: &[i64],
+    ) -> RistrettoPoint {
+        // λ_i = ∏_{j≠i} j / (j - i)
+        let mut lambda_num = RistrettoScalar::ONE;
+        let mut lambda_den = RistrettoScalar::ONE;
+        let mut sign = 1i64;
+
+        for &j in values {
+            if j == position {
+                continue;
+            }
+            lambda_num *= RistrettoScalar::from(j as u64);
+            let diff = j - position;
+            if diff < 0 {
+                sign *= -1;
+                lambda_den *= RistrettoScalar::from((-diff) as u64);
+            } else {
+                lambda_den *= RistrettoScalar::from(diff as u64);
+            }
+        }
+
+        // λ = numerator * denominator^(-1)
+        // Note: curve25519-dalek Scalar::invert() returns CtOption, convert to Option
+        let lambda_den_inv = Option::from(lambda_den.invert());
+        let lambda = match lambda_den_inv {
+            Some(inv) => lambda_num * inv,
+            None => {
+                // This should never happen with valid Lagrange coefficients
+                RistrettoScalar::ZERO
+            }
+        };
 
         // Compute share^λ = λ * share (scalar multiplication)
         let mut factor = self.group.exp(share, &lambda);
