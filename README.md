@@ -39,6 +39,10 @@ cargo run --release --example mpvss_sub
 # secp256k1 elliptic curve examples
 cargo run --release --example mpvss_all_secp256k1
 cargo run --release --example mpvss_sub_secp256k1
+
+# Ristretto255 prime-order group examples
+cargo run --release --example mpvss_all_ristretto255
+cargo run --release --example mpvss_sub_ristretto255
 ```
 
 ### Usage
@@ -144,6 +148,7 @@ The library supports multiple cryptographic groups through a generic `Group` tra
 
 - **`ModpGroup`**: 2048-bit MODP group (RFC 3526) - Default implementation
 - **`Secp256k1Group`**: secp256k1 elliptic curve (Bitcoin's curve) - Always available
+- **`Ristretto255Group`**: Ristretto255 prime-order group (built on Curve25519) - Always available
 
 The `Participant<G>` struct is generic over the group type, allowing the same PVSS operations to work with different cryptographic backends. The Rust compiler automatically selects the correct implementation based on the group type, so you use the same method names for all groups.
 
@@ -198,6 +203,59 @@ let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
 - Method names are the same as MODP (no suffix needed)
 - Private keys are generated via `group.generate_private_key()` instead of manual BigInt RNG
 - `Scalar::from_repr` expects big-endian byte representation
+
+#### Ristretto255 Usage
+
+Ristretto255 is a prime-order group built on Curve25519 (Ed25519). It solves the cofactor issues of Ed25519 by constructing a prime-order quotient group, making it ideal for cryptographic protocols like PVSS.
+
+```rust
+use mpvss_rs::groups::Ristretto255Group;
+use mpvss_rs::Participant;
+use mpvss_rs::group::Group; // Import Group trait for method access
+
+let secret_message = String::from("Hello MPVSS (Ristretto255).");
+
+// Create the group (returns Arc<Ristretto255Group>)
+let group = Ristretto255Group::new();
+
+// Create dealer and participants with the group
+let mut dealer = Participant::with_arc(group.clone());
+dealer.initialize();
+
+let mut p1 = Participant::with_arc(Ristretto255Group::new());
+let mut p2 = Participant::with_arc(Ristretto255Group::new());
+let mut p3 = Participant::with_arc(Ristretto255Group::new());
+
+p1.initialize();
+p2.initialize();
+p3.initialize();
+
+// Distribution - same method names as MODP and secp256k1
+let distribute_shares_box = dealer.distribute_secret(
+    &string_to_secret(&secret_message),
+    &vec![p1.publickey.clone(), p2.publickey.clone(), p3.publickey.clone()],
+    3,
+);
+
+// Verification - same method names
+assert_eq!(p1.verify_distribution_shares(&distribute_shares_box), true);
+
+// Share extraction
+let w = group.generate_private_key(); // No need for BigInt RNG
+let s1 = p1.extract_secret_share(&distribute_shares_box, &p1.privatekey, &w).unwrap();
+
+// Reconstruction - same method names
+let share_boxs = [s1, s2, s3];
+let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
+```
+
+**Key Differences for Ristretto255:**
+- Elements are Ristretto points (`curve25519_dalek::RistrettoPoint`) - 32-byte compressed encoding
+- Scalars are `curve25519_dalek::Scalar` (32 bytes, little-endian)
+- Prime-order group (cofactor = 1), eliminating small-subgroup attack concerns
+- Method names are the same as other groups (unified API)
+- Private keys are generated via `group.generate_private_key()`
+- Uses SHA-512 for hash-to-scalar (wider output for better uniformity)
 
 ## Related References:
 

@@ -45,3 +45,7 @@ jobs:
         run: |
           cargo run --example mpvss_all
           cargo run --example mpvss_sub
+          cargo run --example mpvss_all_secp256k1
+          cargo run --example mpvss_sub_secp256k1
+          cargo run --example mpvss_all_ristretto255
+          cargo run --example mpvss_sub_ristretto255
