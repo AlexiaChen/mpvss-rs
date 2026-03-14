@@ -13,10 +13,9 @@
 //! - **Curve equation**: y² = x³ + 7 over F_p
 //! - **Base point (G)**: Standardized generator point
 
+use k256::elliptic_curve::bigint::U256;
+use k256::elliptic_curve::ops::Reduce;
 use k256::elliptic_curve::FieldBytes;
-
-use k256::elliptic_curve::ff::PrimeField;
-
 use k256::elliptic_curve::group::GroupEncoding;
 
 use k256::{AffinePoint, ProjectivePoint, Scalar, Secp256k1};
@@ -125,10 +124,9 @@ impl Group for Secp256k1Group {
         let mut field_bytes = FieldBytes::<Secp256k1>::default();
         let hash_len = hash.len().min(field_bytes.len());
         let field_bytes_len = field_bytes.len();
-        field_bytes[(field_bytes_len - hash_len)..]
-            .copy_from_slice(&hash[..hash_len]);
-        // from_repr performs modular reduction modulo curve order
-        Scalar::from_repr(field_bytes).unwrap()
+        field_bytes[(field_bytes_len - hash_len)..].copy_from_slice(&hash[..hash_len]);
+        // Reduce modulo curve order to avoid rejection for non-canonical bytes
+        Scalar::reduce(U256::from_be_slice(field_bytes.as_ref()))
     }
 
     fn element_to_bytes(&self, elem: &Self::Element) -> Vec<u8> {
@@ -162,9 +160,8 @@ impl Group for Secp256k1Group {
         for byte in &mut bytes {
             *byte = rand::random::<u8>();
         }
-        // from_repr performs modular reduction modulo curve order
-        // Note: .into() is needed here to convert [u8; 32] to FieldBytes
-        Scalar::from_repr(bytes.into()).unwrap()
+        // Reduce modulo curve order to avoid invalid scalar rejection
+        Scalar::reduce(U256::from_be_slice(&bytes))
     }
 
     fn generate_public_key(&self, private_key: &Self::Scalar) -> Self::Element {
