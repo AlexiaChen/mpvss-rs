@@ -62,7 +62,8 @@ impl ModpGroup {
             q: q.to_bigint().unwrap(),
             g: g.to_bigint().unwrap(),
             G: BigInt::from(2),
-            g_gen: BigInt::from(2).modpow(&BigInt::from(2), &q.to_bigint().unwrap()),
+            g_gen: BigInt::from(2)
+                .modpow(&BigInt::from(2), &q.to_bigint().unwrap()),
             q_minus_1: q.to_bigint().unwrap() - BigInt::one(),
         })
     }
@@ -76,7 +77,8 @@ impl ModpGroup {
             q: q.to_bigint().unwrap(),
             g: g.to_bigint().unwrap(),
             G: BigInt::from(2),
-            g_gen: BigInt::from(2).modpow(&BigInt::from(2), &q.to_bigint().unwrap()),
+            g_gen: BigInt::from(2)
+                .modpow(&BigInt::from(2), &q.to_bigint().unwrap()),
             q_minus_1: q.to_bigint().unwrap() - BigInt::one(),
         })
     }
