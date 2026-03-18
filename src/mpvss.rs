@@ -65,9 +65,15 @@ impl<G: Group> PVSS<G> {
 
 impl<G: Group> PVSS<G>
 where
-    G::Scalar: Clone + One,
+    G::Scalar: Clone + One + From<i64>,
     G::Element: Clone + Eq + Ord,
 {
+    #[inline]
+    fn update_framed_hash(hasher: &mut Sha256, bytes: &[u8]) {
+        hasher.update((bytes.len() as u64).to_be_bytes());
+        hasher.update(bytes);
+    }
+
     /// Verify that the shares in the distribution shares box are consistent.
     ///
     /// This is the public verifiability part of PVSS - anyone can verify the dealer
@@ -117,14 +123,8 @@ where
                     .group
                     .exp(&distribute_sharesbox.commitments[j], &exponent);
                 x_val = self.group.mul(&x_val, &c_j_pow);
-                // Note: This assumes we can create a scalar from position
-                // For generic groups, this would need to be handled differently
-                let pos_scalar = Self::position_to_scalar(*position.unwrap());
+                let pos_scalar = G::Scalar::from(*position.unwrap());
                 exponent = self.group.scalar_mul(&exponent, &pos_scalar);
-                if j < distribute_sharesbox.commitments.len() - 1 {
-                    // Only mod if not the last iteration (avoid unnecessary ops)
-                    let _ = &exponent;
-                }
             }
 
             // Verify DLEQ proof for this participant
@@ -141,11 +141,22 @@ where
             let a2 = self.group.mul(&y_r, &y_c);
 
             // Update hash with X_i, Y_i, a_1, a_2
-            challenge_hasher.update(self.group.element_to_bytes(&x_val));
-            challenge_hasher
-                .update(self.group.element_to_bytes(encrypted_share.unwrap()));
-            challenge_hasher.update(self.group.element_to_bytes(&a1));
-            challenge_hasher.update(self.group.element_to_bytes(&a2));
+            Self::update_framed_hash(
+                &mut challenge_hasher,
+                &self.group.element_to_bytes(&x_val),
+            );
+            Self::update_framed_hash(
+                &mut challenge_hasher,
+                &self.group.element_to_bytes(encrypted_share.unwrap()),
+            );
+            Self::update_framed_hash(
+                &mut challenge_hasher,
+                &self.group.element_to_bytes(&a1),
+            );
+            Self::update_framed_hash(
+                &mut challenge_hasher,
+                &self.group.element_to_bytes(&a2),
+            );
         }
 
         // Calculate final challenge and check if it matches c
@@ -153,20 +164,6 @@ where
         let computed_challenge = self.group.hash_to_scalar(&challenge_hash);
 
         computed_challenge == distribute_sharesbox.challenge
-    }
-
-    /// Helper: Convert position (i64) to Scalar
-    ///
-    /// This is a placeholder - proper implementation would need to be trait-based
-    fn position_to_scalar(pos: i64) -> G::Scalar {
-        // This is a simplified version - proper implementation would need
-        // the Group trait to provide this conversion
-        // For now, this is only used in the ModpGroup case where Scalar = BigInt
-        // and we can use the From trait
-        let _ = pos;
-        panic!(
-            "position_to_scalar needs to be implemented for the specific group type"
-        );
     }
 }
 
@@ -193,6 +190,7 @@ mod tests {
     #[test]
     fn test_generic_mpvss_verify_distribution_shares() {
         let group = ModpGroup::new();
+        let pvss = PVSS::new(group.clone());
         let mut dealer = Participant::with_arc(group.clone());
 
         let secret = BigUint::from(123456u32);
@@ -215,8 +213,8 @@ mod tests {
             3,
         );
 
-        // Verify distribution shares using Participant directly
-        assert!(dealer.verify_distribution_shares(&dist_box));
+        // Verify distribution shares using PVSS generic API.
+        assert!(pvss.verify_distribution_shares(&dist_box));
     }
 
     #[test]

@@ -156,6 +156,24 @@ impl<G: Group> Participant<G> {
 /// but some BigInt operations remain for non-group computations (Lagrange coefficients,
 /// polynomial arithmetic, etc.).
 impl Participant<ModpGroup> {
+    #[inline]
+    fn update_framed_hash(hasher: &mut Sha256, bytes: &[u8]) {
+        // Prefix each field with length to avoid transcript ambiguities on
+        // variable-length BigInt encodings.
+        hasher.update((bytes.len() as u64).to_be_bytes());
+        hasher.update(bytes);
+    }
+
+    #[inline]
+    fn update_framed_element_hash(
+        &self,
+        hasher: &mut Sha256,
+        element: &BigInt,
+    ) {
+        let bytes = self.group.element_to_bytes(element);
+        Self::update_framed_hash(hasher, &bytes);
+    }
+
     /// Distribute a secret among participants (full implementation for ModpGroup).
     pub fn distribute_secret(
         &mut self,
@@ -173,9 +191,6 @@ impl Participant<ModpGroup> {
         // Generate random polynomial (coefficients are scalars in Z_q)
         let mut polynomial = Polynomial::new();
         polynomial.init((threshold - 1) as i32, group_order);
-
-        // Generate random witness w (scalar)
-        let w = self.group.generate_private_key();
 
         // Data structures
         let mut commitments: Vec<BigInt> = Vec::new();
@@ -223,6 +238,7 @@ impl Participant<ModpGroup> {
             shares.insert(pubkey_bytes.clone(), encrypted_secret_share.clone());
 
             // Generate DLEQ proof: DLEQ(g, X_i, y_i, Y_i)
+            let witness = self.group.generate_private_key();
             let mut dleq = DLEQ::new(self.group.clone());
             dleq.init(
                 subgroup_gen.clone(),
@@ -230,27 +246,20 @@ impl Participant<ModpGroup> {
                 pubkey.clone(),
                 encrypted_secret_share.clone(),
                 secret_share.clone(),
-                w.clone(),
+                witness.clone(),
             );
-            dleq_w.insert(pubkey_bytes.clone(), w.clone());
+            dleq_w.insert(pubkey_bytes.clone(), witness);
 
-            // Update challenge hash - use same format as legacy implementation
+            // Update transcript hash with canonical framed element encoding.
             let a1 = dleq.get_a1();
             let a2 = dleq.get_a2();
-            challenge_hasher.update(
-                x_val.to_biguint().unwrap().to_str_radix(10).as_bytes(),
+            self.update_framed_element_hash(&mut challenge_hasher, &x_val);
+            self.update_framed_element_hash(
+                &mut challenge_hasher,
+                &encrypted_secret_share,
             );
-            challenge_hasher.update(
-                encrypted_secret_share
-                    .to_biguint()
-                    .unwrap()
-                    .to_str_radix(10)
-                    .as_bytes(),
-            );
-            challenge_hasher
-                .update(a1.to_biguint().unwrap().to_str_radix(10).as_bytes());
-            challenge_hasher
-                .update(a2.to_biguint().unwrap().to_str_radix(10).as_bytes());
+            self.update_framed_element_hash(&mut challenge_hasher, &a1);
+            self.update_framed_element_hash(&mut challenge_hasher, &a2);
 
             position += 1;
         }
@@ -274,9 +283,7 @@ impl Participant<ModpGroup> {
         // Compute U = secret XOR H(G^s) using group.exp()
         let s = polynomial.get_value(&BigInt::zero()) % group_order;
         let g_s = self.group.exp(&main_gen, &s);
-        let sha256_hash = Sha256::digest(
-            g_s.to_biguint().unwrap().to_str_radix(10).as_bytes(),
-        );
+        let sha256_hash = Sha256::digest(self.group.element_to_bytes(&g_s));
         let hash_biguint = BigUint::from_bytes_be(&sha256_hash[..])
             .mod_floor(&self.group.modulus().to_biguint().unwrap());
         let u = secret.to_biguint().unwrap() ^ hash_biguint;
@@ -338,23 +345,16 @@ impl Participant<ModpGroup> {
 
         // Compute challenge using group operations
         let mut challenge_hasher = Sha256::new();
-        challenge_hasher.update(
-            public_key.to_biguint().unwrap().to_str_radix(10).as_bytes(),
-        );
-        challenge_hasher.update(
-            encrypted_secret_share
-                .to_biguint()
-                .unwrap()
-                .to_str_radix(10)
-                .as_bytes(),
+        self.update_framed_element_hash(&mut challenge_hasher, &public_key);
+        self.update_framed_element_hash(
+            &mut challenge_hasher,
+            encrypted_secret_share,
         );
 
         let a1 = dleq.get_a1();
         let a2 = dleq.get_a2();
-        challenge_hasher
-            .update(a1.to_biguint().unwrap().to_str_radix(10).as_bytes());
-        challenge_hasher
-            .update(a2.to_biguint().unwrap().to_str_radix(10).as_bytes());
+        self.update_framed_element_hash(&mut challenge_hasher, &a1);
+        self.update_framed_element_hash(&mut challenge_hasher, &a2);
 
         let challenge_hash = challenge_hasher.finalize();
         let challenge = self.group.hash_to_scalar(&challenge_hash);
@@ -403,22 +403,10 @@ impl Participant<ModpGroup> {
 
         // Compute challenge hash and verify
         let mut challenge_hasher = Sha256::new();
-        challenge_hasher.update(
-            publickey.to_biguint().unwrap().to_str_radix(10).as_bytes(),
-        );
-        challenge_hasher.update(
-            encrypted_share
-                .to_biguint()
-                .unwrap()
-                .to_str_radix(10)
-                .as_bytes(),
-        );
-        challenge_hasher.update(
-            a1_verify.to_biguint().unwrap().to_str_radix(10).as_bytes(),
-        );
-        challenge_hasher.update(
-            a2_verify.to_biguint().unwrap().to_str_radix(10).as_bytes(),
-        );
+        self.update_framed_element_hash(&mut challenge_hasher, publickey);
+        self.update_framed_element_hash(&mut challenge_hasher, encrypted_share);
+        self.update_framed_element_hash(&mut challenge_hasher, &a1_verify);
+        self.update_framed_element_hash(&mut challenge_hasher, &a2_verify);
 
         let challenge_hash = challenge_hasher.finalize();
         let challenge_computed = self.group.hash_to_scalar(&challenge_hash);
@@ -487,22 +475,14 @@ impl Participant<ModpGroup> {
                 .exp(encrypted_share.unwrap(), &distribute_sharesbox.challenge);
             let a2 = self.group.mul(&y_r, &y_c);
 
-            // Update hash with X_i, Y_i, a_1, a_2
-            challenge_hasher.update(
-                x_val.to_biguint().unwrap().to_str_radix(10).as_bytes(),
+            // Update transcript hash with canonical framed element encoding.
+            self.update_framed_element_hash(&mut challenge_hasher, &x_val);
+            self.update_framed_element_hash(
+                &mut challenge_hasher,
+                encrypted_share.unwrap(),
             );
-            challenge_hasher.update(
-                encrypted_share
-                    .unwrap()
-                    .to_biguint()
-                    .unwrap()
-                    .to_str_radix(10)
-                    .as_bytes(),
-            );
-            challenge_hasher
-                .update(a1.to_biguint().unwrap().to_str_radix(10).as_bytes());
-            challenge_hasher
-                .update(a2.to_biguint().unwrap().to_str_radix(10).as_bytes());
+            self.update_framed_element_hash(&mut challenge_hasher, &a1);
+            self.update_framed_element_hash(&mut challenge_hasher, &a2);
         }
 
         // Calculate final challenge and check if it matches c
@@ -528,7 +508,7 @@ impl Participant<ModpGroup> {
             return None;
         }
 
-        let group_modulus = self.group.modulus();
+        let subgroup_order = self.group.subgroup_order();
 
         // Build position -> share map
         let mut shares: BTreeMap<i64, BigInt> = BTreeMap::new();
@@ -545,17 +525,21 @@ impl Participant<ModpGroup> {
         let shares_vec: Vec<(i64, BigInt)> = shares.into_iter().collect();
         let shares_slice = shares_vec.as_slice();
 
-        let factors: Vec<BigInt> = shares_slice
+        let factor_options: Vec<Option<BigInt>> = shares_slice
             .par_iter()
             .map(|(position, share)| {
                 self.compute_lagrange_factor(
                     *position,
                     share,
                     &values,
-                    group_modulus,
+                    subgroup_order,
                 )
             })
             .collect();
+        let mut factors: Vec<BigInt> = Vec::with_capacity(factor_options.len());
+        for factor in factor_options {
+            factors.push(factor?);
+        }
 
         // Multiply all factors using group.mul()
         secret = factors
@@ -563,9 +547,7 @@ impl Participant<ModpGroup> {
             .fold(secret, |acc, factor| self.group.mul(&acc, &factor));
 
         // Reconstruct secret = H(G^s) XOR U
-        let secret_hash = Sha256::digest(
-            secret.to_biguint().unwrap().to_str_radix(10).as_bytes(),
-        );
+        let secret_hash = Sha256::digest(self.group.element_to_bytes(&secret));
         let hash_biguint = BigUint::from_bytes_be(&secret_hash[..])
             .mod_floor(&self.group.modulus().to_biguint().unwrap());
         let decrypted_secret =
@@ -584,56 +566,36 @@ impl Participant<ModpGroup> {
         position: i64,
         share: &BigInt,
         values: &[i64],
-        group_modulus: &BigInt,
-    ) -> BigInt {
+        subgroup_order: &BigInt,
+    ) -> Option<BigInt> {
         use crate::util::Util;
 
         let lagrange_coefficient =
             Util::lagrange_coefficient(&position, values);
 
-        // Compute exponent: λ_i (may be fractional, needs modular inverse)
-        let exponent = if lagrange_coefficient.1 == BigInt::from(1) {
-            // Lagrange coefficient is an integer
-            lagrange_coefficient.0.clone() / Util::abs(&lagrange_coefficient.1)
-        } else {
-            // Lagrange coefficient is a proper fraction
-            let mut numerator = lagrange_coefficient.0.to_biguint().unwrap();
-            let mut denominator =
-                Util::abs(&lagrange_coefficient.1).to_biguint().unwrap();
-            let gcd = numerator.gcd(&denominator);
-            numerator /= &gcd;
-            denominator /= &gcd;
-
-            let group_order_minus_1 = group_modulus - BigInt::one();
-            let inverse_denominator = Util::mod_inverse(
-                &denominator.to_bigint().unwrap(),
-                &group_order_minus_1,
-            );
-
-            match inverse_denominator {
-                Some(inv) => {
-                    (numerator.to_bigint().unwrap() * inv) % group_order_minus_1
-                }
-                None => {
-                    // If denominator has no inverse, return identity element
-                    // This should not happen in normal operation with valid shares
-                    BigInt::one()
-                }
-            }
-        };
+        // Compute exponent λ_i in the subgroup scalar field.
+        let is_negative = lagrange_coefficient.0.clone()
+            * lagrange_coefficient.1.clone()
+            < BigInt::zero();
+        let mut numerator = Util::abs(&lagrange_coefficient.0);
+        let mut denominator = Util::abs(&lagrange_coefficient.1);
+        let gcd = numerator.gcd(&denominator);
+        numerator /= &gcd;
+        denominator /= &gcd;
+        let denominator_inverse =
+            Util::mod_inverse(&denominator, subgroup_order)?;
+        let exponent =
+            (numerator * denominator_inverse).mod_floor(subgroup_order);
 
         // Compute S_i^λ_i using group.exp()
         let mut factor = self.group.exp(share, &exponent);
 
         // Handle negative Lagrange coefficient using element_inverse
-        if lagrange_coefficient.0.clone() * lagrange_coefficient.1
-            < BigInt::zero()
-            && let Some(inverse_factor) = self.group.element_inverse(&factor)
-        {
-            factor = inverse_factor;
+        if is_negative {
+            factor = self.group.element_inverse(&factor)?;
         }
 
-        factor
+        Some(factor)
     }
 }
 
@@ -770,6 +732,51 @@ mod tests {
         assert_eq!(
             reconstructed_message, secret_message,
             "Reconstructed message should match original"
+        );
+    }
+
+    /// Regression test: threshold-2 reconstruction must work for non-adjacent
+    /// participant subset positions {1, 3}.
+    #[test]
+    fn test_threshold_subset_modp_positions_1_and_3() {
+        use num_bigint::{BigUint, ToBigInt};
+
+        let group = ModpGroup::new();
+        let mut dealer = Participant::with_arc(group.clone());
+        dealer.initialize();
+
+        let mut p1 = Participant::with_arc(group.clone());
+        let mut p2 = Participant::with_arc(group.clone());
+        let mut p3 = Participant::with_arc(group.clone());
+        p1.initialize();
+        p2.initialize();
+        p3.initialize();
+
+        let secret = BigUint::from(123456u32).to_bigint().unwrap();
+        let publickeys = vec![
+            p1.publickey.clone(),
+            p2.publickey.clone(),
+            p3.publickey.clone(),
+        ];
+        let dist_box = dealer.distribute_secret(&secret, &publickeys, 2);
+
+        let mut rng = rand::thread_rng();
+        let w: BigInt = rng
+            .gen_biguint_below(&group.modulus().to_biguint().unwrap())
+            .to_bigint()
+            .unwrap();
+
+        let s1 = p1
+            .extract_secret_share(&dist_box, &p1.privatekey, &w)
+            .unwrap();
+        let s3 = p3
+            .extract_secret_share(&dist_box, &p3.privatekey, &w)
+            .unwrap();
+
+        let reconstructed = dealer.reconstruct(&[s1, s3], &dist_box).unwrap();
+        assert_eq!(
+            reconstructed, secret,
+            "Threshold-2 reconstruction from positions 1 and 3 should recover original secret"
         );
     }
 
@@ -1150,9 +1157,6 @@ impl Participant<Secp256k1Group> {
         let group_order_bigint = self.group.order_as_bigint().clone();
         polynomial.init((threshold - 1) as i32, &group_order_bigint);
 
-        // Generate random witness w (scalar)
-        let w = self.group.generate_private_key();
-
         // Data structures - use Vec<u8> keys (serialized points) since AffinePoint doesn't implement Hash
         let mut commitments: Vec<AffinePoint> = Vec::new();
         let mut positions: std::collections::HashMap<Vec<u8>, i64> =
@@ -1208,7 +1212,8 @@ impl Participant<Secp256k1Group> {
             }
             let secret_share = Scalar::from_repr(field_bytes).unwrap();
             sampling_points.insert(pubkey_bytes.clone(), secret_share);
-            dleq_w.insert(pubkey_bytes.clone(), w);
+            let witness = self.group.generate_private_key();
+            dleq_w.insert(pubkey_bytes.clone(), witness);
 
             // Calculate X_i = Σ_j (position^j) * C_j (using EC operations)
             let mut x_val = self.group.identity();
@@ -1235,7 +1240,7 @@ impl Participant<Secp256k1Group> {
                 *pubkey,
                 encrypted_secret_share,
                 secret_share,
-                w,
+                witness,
             );
 
             // Update challenge hash - use element_to_bytes() for EC points
@@ -1644,9 +1649,6 @@ impl Participant<Ristretto255Group> {
         let group_order_bigint = self.group.order_as_bigint().clone();
         polynomial.init((threshold - 1) as i32, &group_order_bigint);
 
-        // Generate random witness w (scalar)
-        let w = self.group.generate_private_key();
-
         // Data structures - use Vec<u8> keys (serialized points) since RistrettoPoint doesn't implement Hash
         let mut commitments: Vec<RistrettoPoint> = Vec::new();
         let mut positions: HashMap<Vec<u8>, i64> = HashMap::new();
@@ -1682,7 +1684,8 @@ impl Participant<Ristretto255Group> {
             let secret_share =
                 Ristretto255Group::bigint_to_scalar(&secret_share_mod);
             sampling_points.insert(pubkey_bytes.clone(), secret_share);
-            dleq_w.insert(pubkey_bytes.clone(), w);
+            let witness = self.group.generate_private_key();
+            dleq_w.insert(pubkey_bytes.clone(), witness);
 
             // Calculate X_i = Σ_j (position^j) * C_j (using EC operations)
             let mut x_val = self.group.identity();
@@ -1711,7 +1714,7 @@ impl Participant<Ristretto255Group> {
                 *pubkey,
                 encrypted_secret_share,
                 secret_share,
-                w,
+                witness,
             );
 
             // Update challenge hash - use element_to_bytes() for EC points
