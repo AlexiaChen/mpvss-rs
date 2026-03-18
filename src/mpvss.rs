@@ -13,6 +13,7 @@ use num_traits::identities::One;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
+use crate::dleq::DLEQ;
 use crate::group::Group;
 use crate::sharebox::DistributionSharesBox;
 
@@ -68,12 +69,6 @@ where
     G::Scalar: Clone + One + From<i64>,
     G::Element: Clone + Eq + Ord,
 {
-    #[inline]
-    fn update_framed_hash(hasher: &mut Sha256, bytes: &[u8]) {
-        hasher.update((bytes.len() as u64).to_be_bytes());
-        hasher.update(bytes);
-    }
-
     /// Verify that the shares in the distribution shares box are consistent.
     ///
     /// This is the public verifiability part of PVSS - anyone can verify the dealer
@@ -127,35 +122,17 @@ where
                 exponent = self.group.scalar_mul(&exponent, &pos_scalar);
             }
 
-            // Verify DLEQ proof for this participant
-            // DLEQ(g, X_i, y_i, Y_i): proves log_g(X_i) = log_{y_i}(Y_i)
-            // a_1 = g^r * X_i^c, a_2 = y_i^r * Y_i^c
-            let g_r = self.group.exp(&subgroup_gen, response.unwrap());
-            let x_c = self.group.exp(&x_val, &distribute_sharesbox.challenge);
-            let a1 = self.group.mul(&g_r, &x_c);
-
-            let y_r = self.group.exp(publickey, response.unwrap());
-            let y_c = self
-                .group
-                .exp(encrypted_share.unwrap(), &distribute_sharesbox.challenge);
-            let a2 = self.group.mul(&y_r, &y_c);
-
-            // Update hash with X_i, Y_i, a_1, a_2
-            Self::update_framed_hash(
+            // Verify DLEQ proof for this participant via shared helper and
+            // append transcript.
+            let _ = DLEQ::<G>::verifier_update_hash(
+                self.group.as_ref(),
+                &subgroup_gen,
+                &x_val,
+                publickey,
+                encrypted_share.unwrap(),
+                response.unwrap(),
+                &distribute_sharesbox.challenge,
                 &mut challenge_hasher,
-                &self.group.element_to_bytes(&x_val),
-            );
-            Self::update_framed_hash(
-                &mut challenge_hasher,
-                &self.group.element_to_bytes(encrypted_share.unwrap()),
-            );
-            Self::update_framed_hash(
-                &mut challenge_hasher,
-                &self.group.element_to_bytes(&a1),
-            );
-            Self::update_framed_hash(
-                &mut challenge_hasher,
-                &self.group.element_to_bytes(&a2),
             );
         }
 

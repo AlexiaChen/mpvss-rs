@@ -156,24 +156,6 @@ impl<G: Group> Participant<G> {
 /// but some BigInt operations remain for non-group computations (Lagrange coefficients,
 /// polynomial arithmetic, etc.).
 impl Participant<ModpGroup> {
-    #[inline]
-    fn update_framed_hash(hasher: &mut Sha256, bytes: &[u8]) {
-        // Prefix each field with length to avoid transcript ambiguities on
-        // variable-length BigInt encodings.
-        hasher.update((bytes.len() as u64).to_be_bytes());
-        hasher.update(bytes);
-    }
-
-    #[inline]
-    fn update_framed_element_hash(
-        &self,
-        hasher: &mut Sha256,
-        element: &BigInt,
-    ) {
-        let bytes = self.group.element_to_bytes(element);
-        Self::update_framed_hash(hasher, &bytes);
-    }
-
     /// Distribute a secret among participants (full implementation for ModpGroup).
     pub fn distribute_secret(
         &mut self,
@@ -250,16 +232,17 @@ impl Participant<ModpGroup> {
             );
             dleq_w.insert(pubkey_bytes.clone(), witness);
 
-            // Update transcript hash with canonical framed element encoding.
+            // Update transcript hash via shared DLEQ helper.
             let a1 = dleq.get_a1();
             let a2 = dleq.get_a2();
-            self.update_framed_element_hash(&mut challenge_hasher, &x_val);
-            self.update_framed_element_hash(
-                &mut challenge_hasher,
+            DLEQ::<ModpGroup>::append_transcript_hash(
+                self.group.as_ref(),
+                &x_val,
                 &encrypted_secret_share,
+                &a1,
+                &a2,
+                &mut challenge_hasher,
             );
-            self.update_framed_element_hash(&mut challenge_hasher, &a1);
-            self.update_framed_element_hash(&mut challenge_hasher, &a2);
 
             position += 1;
         }
@@ -345,16 +328,16 @@ impl Participant<ModpGroup> {
 
         // Compute challenge using group operations
         let mut challenge_hasher = Sha256::new();
-        self.update_framed_element_hash(&mut challenge_hasher, &public_key);
-        self.update_framed_element_hash(
-            &mut challenge_hasher,
-            encrypted_secret_share,
-        );
-
         let a1 = dleq.get_a1();
         let a2 = dleq.get_a2();
-        self.update_framed_element_hash(&mut challenge_hasher, &a1);
-        self.update_framed_element_hash(&mut challenge_hasher, &a2);
+        DLEQ::<ModpGroup>::append_transcript_hash(
+            self.group.as_ref(),
+            &public_key,
+            encrypted_secret_share,
+            &a1,
+            &a2,
+            &mut challenge_hasher,
+        );
 
         let challenge_hash = challenge_hasher.finalize();
         let challenge = self.group.hash_to_scalar(&challenge_hash);
@@ -391,27 +374,15 @@ impl Participant<ModpGroup> {
                 None => return false,
             };
 
-        // Verify DLEQ proof using group operations
-        // a_1 = G^r * publickey^c, a_2 = decrypted_share^r * encrypted_share^c
-        let g1_r = self.group.exp(&main_gen, &sharebox.response);
-        let h1_c = self.group.exp(publickey, &sharebox.challenge);
-        let a1_verify = self.group.mul(&g1_r, &h1_c);
-
-        let g2_r = self.group.exp(&sharebox.share, &sharebox.response);
-        let h2_c = self.group.exp(encrypted_share, &sharebox.challenge);
-        let a2_verify = self.group.mul(&g2_r, &h2_c);
-
-        // Compute challenge hash and verify
-        let mut challenge_hasher = Sha256::new();
-        self.update_framed_element_hash(&mut challenge_hasher, publickey);
-        self.update_framed_element_hash(&mut challenge_hasher, encrypted_share);
-        self.update_framed_element_hash(&mut challenge_hasher, &a1_verify);
-        self.update_framed_element_hash(&mut challenge_hasher, &a2_verify);
-
-        let challenge_hash = challenge_hasher.finalize();
-        let challenge_computed = self.group.hash_to_scalar(&challenge_hash);
-
-        challenge_computed == sharebox.challenge
+        // Verify share DLEQ proof through shared verifier object path.
+        let mut dleq = DLEQ::<ModpGroup>::new(self.group.clone());
+        dleq.g1 = main_gen;
+        dleq.h1 = publickey.clone();
+        dleq.g2 = sharebox.share.clone();
+        dleq.h2 = encrypted_share.clone();
+        dleq.c = Some(sharebox.challenge.clone());
+        dleq.r = Some(sharebox.response.clone());
+        dleq.verify()
     }
 
     /// Verify distribution shares box (ModpGroup implementation).
@@ -462,27 +433,18 @@ impl Participant<ModpGroup> {
                     % group_order;
             }
 
-            // Verify DLEQ proof for this participant
-            // DLEQ(g, X_i, y_i, Y_i): proves log_g(X_i) = log_{y_i}(Y_i)
-            // a_1 = g^r * X_i^c, a_2 = y_i^r * Y_i^c
-            let g_r = self.group.exp(&subgroup_gen, response.unwrap());
-            let x_c = self.group.exp(&x_val, &distribute_sharesbox.challenge);
-            let a1 = self.group.mul(&g_r, &x_c);
-
-            let y_r = self.group.exp(publickey, response.unwrap());
-            let y_c = self
-                .group
-                .exp(encrypted_share.unwrap(), &distribute_sharesbox.challenge);
-            let a2 = self.group.mul(&y_r, &y_c);
-
-            // Update transcript hash with canonical framed element encoding.
-            self.update_framed_element_hash(&mut challenge_hasher, &x_val);
-            self.update_framed_element_hash(
-                &mut challenge_hasher,
+            // Verify DLEQ proof for this participant using shared helper and
+            // append transcript.
+            let _ = DLEQ::<ModpGroup>::verifier_update_hash(
+                self.group.as_ref(),
+                &subgroup_gen,
+                &x_val,
+                publickey,
                 encrypted_share.unwrap(),
+                response.unwrap(),
+                &distribute_sharesbox.challenge,
+                &mut challenge_hasher,
             );
-            self.update_framed_element_hash(&mut challenge_hasher, &a1);
-            self.update_framed_element_hash(&mut challenge_hasher, &a2);
         }
 
         // Calculate final challenge and check if it matches c
@@ -1031,17 +993,10 @@ mod tests {
         let mut dleq = DLEQ::new(group.clone());
         dleq.init(g1, h1, g2, h2, alpha, w);
 
-        // Compute a1, a2
-        let a1 = dleq.get_a1();
-        let a2 = dleq.get_a2();
-
         // Compute challenge
         use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
-        hasher.update(group.element_to_bytes(&h1));
-        hasher.update(group.element_to_bytes(&h2));
-        hasher.update(group.element_to_bytes(&a1));
-        hasher.update(group.element_to_bytes(&a2));
+        dleq.update_hash(&mut hasher);
         let hash = hasher.finalize();
         let challenge = group.hash_to_scalar(&hash);
 
@@ -1243,15 +1198,17 @@ impl Participant<Secp256k1Group> {
                 witness,
             );
 
-            // Update challenge hash - use element_to_bytes() for EC points
+            // Update challenge hash via shared DLEQ helper.
             let a1 = dleq.get_a1();
             let a2 = dleq.get_a2();
-
-            challenge_hasher.update(self.group.element_to_bytes(&x_val));
-            challenge_hasher
-                .update(self.group.element_to_bytes(&encrypted_secret_share));
-            challenge_hasher.update(self.group.element_to_bytes(&a1));
-            challenge_hasher.update(self.group.element_to_bytes(&a2));
+            DLEQ::<Secp256k1Group>::append_transcript_hash(
+                self.group.as_ref(),
+                &x_val,
+                &encrypted_secret_share,
+                &a1,
+                &a2,
+                &mut challenge_hasher,
+            );
 
             position += 1;
         }
@@ -1354,16 +1311,18 @@ impl Participant<Secp256k1Group> {
             *w,
         );
 
-        // Compute challenge using element_to_bytes() for EC points
+        // Compute challenge using shared DLEQ transcript helper.
         let mut challenge_hasher = Sha256::new();
-        challenge_hasher.update(self.group.element_to_bytes(&public_key));
-        challenge_hasher
-            .update(self.group.element_to_bytes(encrypted_secret_share));
-
         let a1 = dleq.get_a1();
         let a2 = dleq.get_a2();
-        challenge_hasher.update(self.group.element_to_bytes(&a1));
-        challenge_hasher.update(self.group.element_to_bytes(&a2));
+        DLEQ::<Secp256k1Group>::append_transcript_hash(
+            self.group.as_ref(),
+            &public_key,
+            encrypted_secret_share,
+            &a1,
+            &a2,
+            &mut challenge_hasher,
+        );
 
         let challenge_hash = challenge_hasher.finalize();
         let challenge = self.group.hash_to_scalar(&challenge_hash);
@@ -1400,28 +1359,15 @@ impl Participant<Secp256k1Group> {
                 None => return false,
             };
 
-        // Verify DLEQ proof using EC operations
-        // a_1 = r*G + c*publickey (point addition)
-        let g1_r = self.group.exp(&main_gen, &sharebox.response);
-        let h1_c = self.group.exp(publickey, &sharebox.challenge);
-        let a1_verify = self.group.mul(&g1_r, &h1_c);
-
-        // a_2 = r*decrypted_share + c*encrypted_share
-        let g2_r = self.group.exp(&sharebox.share, &sharebox.response);
-        let h2_c = self.group.exp(encrypted_share, &sharebox.challenge);
-        let a2_verify = self.group.mul(&g2_r, &h2_c);
-
-        // Compute challenge hash using element_to_bytes() for EC points
-        let mut challenge_hasher = Sha256::new();
-        challenge_hasher.update(self.group.element_to_bytes(publickey));
-        challenge_hasher.update(self.group.element_to_bytes(encrypted_share));
-        challenge_hasher.update(self.group.element_to_bytes(&a1_verify));
-        challenge_hasher.update(self.group.element_to_bytes(&a2_verify));
-
-        let challenge_hash = challenge_hasher.finalize();
-        let challenge_computed = self.group.hash_to_scalar(&challenge_hash);
-
-        challenge_computed == sharebox.challenge
+        // Verify share DLEQ proof through shared verifier object path.
+        let mut dleq = DLEQ::<Secp256k1Group>::new(self.group.clone());
+        dleq.g1 = main_gen;
+        dleq.h1 = *publickey;
+        dleq.g2 = sharebox.share;
+        dleq.h2 = *encrypted_share;
+        dleq.c = Some(sharebox.challenge);
+        dleq.r = Some(sharebox.response);
+        dleq.verify()
     }
 
     /// Verify distribution shares box (Secp256k1Group implementation).
@@ -1474,25 +1420,18 @@ impl Participant<Secp256k1Group> {
                 exponent = self.group.scalar_mul(&exponent, &pos_scalar);
             }
 
-            // Verify DLEQ proof for this participant
-            // DLEQ(g, X_i, y_i, Y_i): proves log_g(X_i) = log_{y_i}(Y_i)
-            // a_1 = r*g + c*X_i, a_2 = r*y_i + c*Y_i
-            let g_r = self.group.exp(&subgroup_gen, response);
-            let x_c = self.group.exp(&x_val, &distribute_sharesbox.challenge);
-            let a1 = self.group.mul(&g_r, &x_c);
-
-            let y_r = self.group.exp(publickey, response);
-            let y_c = self
-                .group
-                .exp(encrypted_share, &distribute_sharesbox.challenge);
-            let a2 = self.group.mul(&y_r, &y_c);
-
-            // Update hash with X_i, Y_i, a_1, a_2 using element_to_bytes()
-            challenge_hasher.update(self.group.element_to_bytes(&x_val));
-            challenge_hasher
-                .update(self.group.element_to_bytes(encrypted_share));
-            challenge_hasher.update(self.group.element_to_bytes(&a1));
-            challenge_hasher.update(self.group.element_to_bytes(&a2));
+            // Verify DLEQ proof for this participant via shared helper and
+            // append transcript.
+            let _ = DLEQ::<Secp256k1Group>::verifier_update_hash(
+                self.group.as_ref(),
+                &subgroup_gen,
+                &x_val,
+                publickey,
+                encrypted_share,
+                response,
+                &distribute_sharesbox.challenge,
+                &mut challenge_hasher,
+            );
         }
 
         // Calculate final challenge and check if it matches
@@ -1717,15 +1656,17 @@ impl Participant<Ristretto255Group> {
                 witness,
             );
 
-            // Update challenge hash - use element_to_bytes() for EC points
+            // Update challenge hash via shared DLEQ helper.
             let a1 = dleq.get_a1();
             let a2 = dleq.get_a2();
-
-            challenge_hasher.update(self.group.element_to_bytes(&x_val));
-            challenge_hasher
-                .update(self.group.element_to_bytes(&encrypted_secret_share));
-            challenge_hasher.update(self.group.element_to_bytes(&a1));
-            challenge_hasher.update(self.group.element_to_bytes(&a2));
+            DLEQ::<Ristretto255Group>::append_transcript_hash(
+                self.group.as_ref(),
+                &x_val,
+                &encrypted_secret_share,
+                &a1,
+                &a2,
+                &mut challenge_hasher,
+            );
 
             position += 1;
         }
@@ -1813,16 +1754,18 @@ impl Participant<Ristretto255Group> {
             *w,
         );
 
-        // Compute challenge using element_to_bytes() for EC points
+        // Compute challenge using shared DLEQ transcript helper.
         let mut challenge_hasher = Sha256::new();
-        challenge_hasher.update(self.group.element_to_bytes(&public_key));
-        challenge_hasher
-            .update(self.group.element_to_bytes(encrypted_secret_share));
-
         let a1 = dleq.get_a1();
         let a2 = dleq.get_a2();
-        challenge_hasher.update(self.group.element_to_bytes(&a1));
-        challenge_hasher.update(self.group.element_to_bytes(&a2));
+        DLEQ::<Ristretto255Group>::append_transcript_hash(
+            self.group.as_ref(),
+            &public_key,
+            encrypted_secret_share,
+            &a1,
+            &a2,
+            &mut challenge_hasher,
+        );
 
         let challenge_hash = challenge_hasher.finalize();
         let challenge = self.group.hash_to_scalar(&challenge_hash);
@@ -1859,28 +1802,15 @@ impl Participant<Ristretto255Group> {
                 None => return false,
             };
 
-        // Verify DLEQ proof using EC operations
-        // a_1 = r*G + c*publickey (point addition)
-        let g1_r = self.group.exp(&main_gen, &sharebox.response);
-        let h1_c = self.group.exp(publickey, &sharebox.challenge);
-        let a1_verify = self.group.mul(&g1_r, &h1_c);
-
-        // a_2 = r*decrypted_share + c*encrypted_share
-        let g2_r = self.group.exp(&sharebox.share, &sharebox.response);
-        let h2_c = self.group.exp(encrypted_share, &sharebox.challenge);
-        let a2_verify = self.group.mul(&g2_r, &h2_c);
-
-        // Compute challenge hash using element_to_bytes() for EC points
-        let mut challenge_hasher = Sha256::new();
-        challenge_hasher.update(self.group.element_to_bytes(publickey));
-        challenge_hasher.update(self.group.element_to_bytes(encrypted_share));
-        challenge_hasher.update(self.group.element_to_bytes(&a1_verify));
-        challenge_hasher.update(self.group.element_to_bytes(&a2_verify));
-
-        let challenge_hash = challenge_hasher.finalize();
-        let challenge_computed = self.group.hash_to_scalar(&challenge_hash);
-
-        challenge_computed == sharebox.challenge
+        // Verify share DLEQ proof through shared verifier object path.
+        let mut dleq = DLEQ::<Ristretto255Group>::new(self.group.clone());
+        dleq.g1 = main_gen;
+        dleq.h1 = *publickey;
+        dleq.g2 = sharebox.share;
+        dleq.h2 = *encrypted_share;
+        dleq.c = Some(sharebox.challenge);
+        dleq.r = Some(sharebox.response);
+        dleq.verify()
     }
 
     /// Verify distribution shares box (Ristretto255Group implementation).
@@ -1933,25 +1863,18 @@ impl Participant<Ristretto255Group> {
                 exponent = self.group.scalar_mul(&exponent, &pos_scalar);
             }
 
-            // Verify DLEQ proof for this participant
-            // DLEQ(g, X_i, y_i, Y_i): proves log_g(X_i) = log_{y_i}(Y_i)
-            // a_1 = r*g + c*X_i, a_2 = r*y_i + c*Y_i
-            let g_r = self.group.exp(&subgroup_gen, response);
-            let x_c = self.group.exp(&x_val, &distribute_sharesbox.challenge);
-            let a1 = self.group.mul(&g_r, &x_c);
-
-            let y_r = self.group.exp(publickey, response);
-            let y_c = self
-                .group
-                .exp(encrypted_share, &distribute_sharesbox.challenge);
-            let a2 = self.group.mul(&y_r, &y_c);
-
-            // Update hash with X_i, Y_i, a_1, a_2 using element_to_bytes()
-            challenge_hasher.update(self.group.element_to_bytes(&x_val));
-            challenge_hasher
-                .update(self.group.element_to_bytes(encrypted_share));
-            challenge_hasher.update(self.group.element_to_bytes(&a1));
-            challenge_hasher.update(self.group.element_to_bytes(&a2));
+            // Verify DLEQ proof for this participant via shared helper and
+            // append transcript.
+            let _ = DLEQ::<Ristretto255Group>::verifier_update_hash(
+                self.group.as_ref(),
+                &subgroup_gen,
+                &x_val,
+                publickey,
+                encrypted_share,
+                response,
+                &distribute_sharesbox.challenge,
+                &mut challenge_hasher,
+            );
         }
 
         // Calculate final challenge and check if it matches
