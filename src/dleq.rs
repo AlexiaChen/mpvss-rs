@@ -54,10 +54,51 @@ impl Prover {
 struct Verifier {}
 
 impl Verifier {
-    /// Update challenge hasher with DLEQ data
-    ///
-    /// Computes a1 = g1^r * h1^c and a2 = g2^r * h2^c for verification
-    #[allow(dead_code)]
+    #[inline]
+    fn update_framed_hash(hasher: &mut Sha256, bytes: &[u8]) {
+        hasher.update((bytes.len() as u64).to_be_bytes());
+        hasher.update(bytes);
+    }
+
+    /// Compute verifier-side commitments:
+    /// a1 = g1^r * h1^c, a2 = g2^r * h2^c
+    #[allow(clippy::too_many_arguments)]
+    fn commitments<G: Group>(
+        group: &G,
+        g1: &G::Element,
+        h1: &G::Element,
+        g2: &G::Element,
+        h2: &G::Element,
+        response: &G::Scalar,
+        c: &G::Scalar,
+    ) -> (G::Element, G::Element) {
+        let g1_r = group.exp(g1, response);
+        let h1_c = group.exp(h1, c);
+        let a1 = group.mul(&g1_r, &h1_c);
+
+        let g2_r = group.exp(g2, response);
+        let h2_c = group.exp(h2, c);
+        let a2 = group.mul(&g2_r, &h2_c);
+
+        (a1, a2)
+    }
+
+    /// Append (h1, h2, a1, a2) to Fiat-Shamir transcript using framed encoding.
+    fn append_transcript<G: Group>(
+        group: &G,
+        h1: &G::Element,
+        h2: &G::Element,
+        a1: &G::Element,
+        a2: &G::Element,
+        hasher: &mut Sha256,
+    ) {
+        Self::update_framed_hash(hasher, &group.element_to_bytes(h1));
+        Self::update_framed_hash(hasher, &group.element_to_bytes(h2));
+        Self::update_framed_hash(hasher, &group.element_to_bytes(a1));
+        Self::update_framed_hash(hasher, &group.element_to_bytes(a2));
+    }
+
+    /// Compute verifier commitments and append them to transcript.
     #[allow(clippy::too_many_arguments)]
     fn update<G: Group>(
         group: &G,
@@ -68,24 +109,10 @@ impl Verifier {
         response: &G::Scalar,
         c: &G::Scalar,
         hasher: &mut Sha256,
-    ) where
-        G::Scalar: Clone,
-        G::Element: Clone,
-    {
-        // Calc a1, a2
-        let g1_r = group.exp(g1, response);
-        let h1_c = group.exp(h1, c);
-        let a1 = group.mul(&g1_r, &h1_c);
-
-        let g2_r = group.exp(g2, response);
-        let h2_c = group.exp(h2, c);
-        let a2 = group.mul(&g2_r, &h2_c);
-
-        // Update hash
-        hasher.update(group.element_to_bytes(h1));
-        hasher.update(group.element_to_bytes(h2));
-        hasher.update(group.element_to_bytes(&a1));
-        hasher.update(group.element_to_bytes(&a2));
+    ) -> (G::Element, G::Element) {
+        let (a1, a2) = Self::commitments(group, g1, h1, g2, h2, response, c);
+        Self::append_transcript(group, h1, h2, &a1, &a2, hasher);
+        (a1, a2)
     }
 
     /// Check that the challenge matches the computed hash
@@ -200,13 +227,55 @@ impl<G: Group> DLEQ<G> {
         })
     }
 
+    /// Compute verifier-side commitments:
+    /// a1 = g1^r * h1^c, a2 = g2^r * h2^c
+    #[allow(clippy::too_many_arguments)]
+    pub fn verifier_commitments(
+        group: &G,
+        g1: &G::Element,
+        h1: &G::Element,
+        g2: &G::Element,
+        h2: &G::Element,
+        response: &G::Scalar,
+        c: &G::Scalar,
+    ) -> (G::Element, G::Element) {
+        Verifier::commitments(group, g1, h1, g2, h2, response, c)
+    }
+
+    /// Append (h1, h2, a1, a2) to Fiat-Shamir transcript.
+    pub fn append_transcript_hash(
+        group: &G,
+        h1: &G::Element,
+        h2: &G::Element,
+        a1: &G::Element,
+        a2: &G::Element,
+        hasher: &mut Sha256,
+    ) {
+        Verifier::append_transcript(group, h1, h2, a1, a2, hasher);
+    }
+
+    /// Compute verifier commitments from (response, challenge) and append them.
+    #[allow(clippy::too_many_arguments)]
+    pub fn verifier_update_hash(
+        group: &G,
+        g1: &G::Element,
+        h1: &G::Element,
+        g2: &G::Element,
+        h2: &G::Element,
+        response: &G::Scalar,
+        c: &G::Scalar,
+        hasher: &mut Sha256,
+    ) -> (G::Element, G::Element) {
+        Verifier::update(group, g1, h1, g2, h2, response, c, hasher)
+    }
+
     /// Verify the DLEQ proof.
     ///
     /// Returns `true` if the proof is valid, `false` otherwise.
     pub fn verify(&self) -> bool
     where
         G::Scalar: Clone,
-        G::Element: Clone + Eq,
+        G::Element: Clone,
     {
         let c = match &self.c {
             Some(c) => c,
@@ -217,21 +286,19 @@ impl<G: Group> DLEQ<G> {
             None => return false,
         };
 
-        // Compute a1' = g1^r * h1^c (MODP) or r*g1 + c*h1 (EC)
-        let g1_r = self.group.exp(&self.g1, r);
-        let h1_c = self.group.exp(&self.h1, c);
-        let a1_prime = self.group.mul(&g1_r, &h1_c);
+        let mut hasher = Sha256::new();
+        let _ = Self::verifier_update_hash(
+            self.group.as_ref(),
+            &self.g1,
+            &self.h1,
+            &self.g2,
+            &self.h2,
+            r,
+            c,
+            &mut hasher,
+        );
 
-        // Compute a2' = g2^r * h2^c (MODP) or r*g2 + c*h2 (EC)
-        let g2_r = self.group.exp(&self.g2, r);
-        let h2_c = self.group.exp(&self.h2, c);
-        let a2_prime = self.group.mul(&g2_r, &h2_c);
-
-        // Check against computed a1, a2
-        let a1 = self.get_a1();
-        let a2 = self.get_a2();
-
-        a1 == a1_prime && a2 == a2_prime
+        self.check(&hasher)
     }
 
     /// Update the challenge hasher with DLEQ data.
@@ -241,10 +308,16 @@ impl<G: Group> DLEQ<G> {
     where
         G::Element: Clone,
     {
-        hasher.update(self.group.element_to_bytes(&self.h1));
-        hasher.update(self.group.element_to_bytes(&self.h2));
-        hasher.update(self.group.element_to_bytes(&self.get_a1()));
-        hasher.update(self.group.element_to_bytes(&self.get_a2()));
+        let a1 = self.get_a1();
+        let a2 = self.get_a2();
+        Self::append_transcript_hash(
+            self.group.as_ref(),
+            &self.h1,
+            &self.h2,
+            &a1,
+            &a2,
+            hasher,
+        );
     }
 
     /// Check that the challenge matches the computed hash.
@@ -254,7 +327,10 @@ impl<G: Group> DLEQ<G> {
     where
         G::Scalar: Clone + Eq,
     {
-        Verifier::check(self.group.as_ref(), self.c.as_ref().unwrap(), hasher)
+        match &self.c {
+            Some(c) => Verifier::check(self.group.as_ref(), c, hasher),
+            None => false,
+        }
     }
 }
 

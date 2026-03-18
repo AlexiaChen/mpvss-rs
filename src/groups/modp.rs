@@ -33,6 +33,8 @@ pub struct ModpGroup {
     g: BigInt,
     /// Main generator (value 2)
     G: BigInt,
+    /// Generator of the large prime-order subgroup (G squared)
+    g_gen: BigInt,
     /// Cached q - 1 (group order)
     q_minus_1: BigInt,
 }
@@ -60,6 +62,8 @@ impl ModpGroup {
             q: q.to_bigint().unwrap(),
             g: g.to_bigint().unwrap(),
             G: BigInt::from(2),
+            g_gen: BigInt::from(2)
+                .modpow(&BigInt::from(2), &q.to_bigint().unwrap()),
             q_minus_1: q.to_bigint().unwrap() - BigInt::one(),
         })
     }
@@ -73,6 +77,8 @@ impl ModpGroup {
             q: q.to_bigint().unwrap(),
             g: g.to_bigint().unwrap(),
             G: BigInt::from(2),
+            g_gen: BigInt::from(2)
+                .modpow(&BigInt::from(2), &q.to_bigint().unwrap()),
             q_minus_1: q.to_bigint().unwrap() - BigInt::one(),
         })
     }
@@ -105,7 +111,8 @@ impl Group for ModpGroup {
     }
 
     fn subgroup_generator(&self) -> Self::Element {
-        self.g.clone()
+        // Use the generator of the large prime-order subgroup (order = g)
+        self.g_gen.clone()
     }
 
     fn identity(&self) -> Self::Element {
