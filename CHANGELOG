@@ -1,3 +1,13 @@
+# Version 2.0.0
+
+## Breaking changes
+
+- Canonicalized transcript framing for Fiat-Shamir and H(G^s) encoding (incompatible with previous releases).
+- Fix: Correct MODP reconstruction Lagrange exponent modulus and inverse handling to avoid incorrect reconstructions.
+- Fix: Per-participant DLEQ witness to avoid cross-share correlation.
+- Refactor: Reuse DLEQ prover/verifier across group implementations and wire verification paths.
+- Tests: Added regression tests and fixed clippy warnings.
+
 # Version 0.2.7
 
 ## Improvements
