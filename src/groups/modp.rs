@@ -308,7 +308,9 @@ mod tests {
     fn test_generate_private_key() {
         let group = ModpGroup::init(64);
         let privkey = group.generate_private_key();
-        assert_eq!(privkey.gcd(&group.q_minus_1), BigInt::one());
+        assert!(privkey > BigInt::zero());
+        assert!(privkey < group.g);
+        assert!(group.scalar_inverse(&privkey).is_some());
     }
 
     #[test]
