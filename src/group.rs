@@ -34,17 +34,23 @@ pub trait Group: Clone + Send + Sync {
     /// Subgroup order (g=(q-1)/2 for MODP, n for EC with cofactor 1)
     fn subgroup_order(&self) -> &Self::Scalar;
 
-    /// Main generator G (used for commitments and public key generation)
+    /// Main generator G (used for public key generation and secret masking)
     ///
     /// - MODP: G = 2
     /// - secp256k1: AffinePoint::GENERATOR
     fn generator(&self) -> Self::Element;
 
-    /// Subgroup generator g (used for computing commitments C_j = g^a_j)
+    /// Independent main generator H used by the Pedersen-style PVSS mask.
+    fn blinding_generator(&self) -> Self::Element;
+
+    /// Subgroup generator g (used for Pedersen commitments)
     ///
     /// - MODP: Sophie Germain prime (q-1)/2
     /// - secp256k1: Same as generator (cofactor is 1)
     fn subgroup_generator(&self) -> Self::Element;
+
+    /// Independent subgroup generator h used for Pedersen commitments.
+    fn subgroup_blinding_generator(&self) -> Self::Element;
 
     /// Identity element (1 for MODP, point at infinity for EC)
     fn identity(&self) -> Self::Element;
@@ -92,15 +98,23 @@ pub trait Group: Clone + Send + Sync {
     /// Serialize scalar to bytes
     fn scalar_to_bytes(&self, scalar: &Self::Scalar) -> Vec<u8>;
 
-    /// Generate a random private key (scalar coprime to group order)
+    /// Generate a random non-zero private key scalar.
     ///
-    /// For MODP groups, the private key must be coprime to (q-1) to enable
-    /// modular inverse computation during reconstruction.
+    /// For MODP groups, the private key is sampled in the prime-order subgroup
+    /// scalar field to enable modular inverse computation during reconstruction.
     /// For elliptic curves with prime order, any non-zero scalar works.
     fn generate_private_key(&self) -> Self::Scalar;
 
     /// Derive public key from private key: P = G^k (MODP) or P = k*G (EC)
     fn generate_public_key(&self, private_key: &Self::Scalar) -> Self::Element;
+
+    /// Derive the second registered public key: P' = H^k (MODP) or k*H (EC).
+    fn generate_blinding_public_key(
+        &self,
+        private_key: &Self::Scalar,
+    ) -> Self::Element {
+        self.exp(&self.blinding_generator(), private_key)
+    }
 
     /// Scalar multiplication: (a * b) mod order
     ///

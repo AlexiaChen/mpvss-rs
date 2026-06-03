@@ -13,7 +13,7 @@ use num_traits::identities::One;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
-use crate::dleq::DLEQ;
+use crate::dleq::DLEQ2;
 use crate::group::Group;
 use crate::sharebox::DistributionSharesBox;
 
@@ -91,20 +91,24 @@ where
         &self,
         distribute_sharesbox: &DistributionSharesBox<G>,
     ) -> bool {
-        let subgroup_gen = self.group.subgroup_generator();
+        let commitment_gen = self.group.subgroup_generator();
+        let commitment_blinding_gen = self.group.subgroup_blinding_generator();
         let mut challenge_hasher = Sha256::new();
 
         // Verify each participant's encrypted share and accumulate hash
         for publickey in &distribute_sharesbox.publickeys {
             // Serialize the element to use as HashMap key
-            let pubkey_bytes = self.group.element_to_bytes(publickey);
+            let pubkey_bytes = publickey.to_bytes(self.group.as_ref());
             let position = distribute_sharesbox.positions.get(&pubkey_bytes);
             let response = distribute_sharesbox.responses.get(&pubkey_bytes);
+            let blinding_response =
+                distribute_sharesbox.blinding_responses.get(&pubkey_bytes);
             let encrypted_share =
                 distribute_sharesbox.shares.get(&pubkey_bytes);
 
             if position.is_none()
                 || response.is_none()
+                || blinding_response.is_none()
                 || encrypted_share.is_none()
             {
                 return false;
@@ -124,13 +128,16 @@ where
 
             // Verify DLEQ proof for this participant via shared helper and
             // append transcript.
-            let _ = DLEQ::<G>::verifier_update_hash(
+            let _ = DLEQ2::<G>::verifier_update_hash(
                 self.group.as_ref(),
-                &subgroup_gen,
+                &commitment_gen,
+                &commitment_blinding_gen,
+                publickey.primary(),
+                publickey.secondary(),
                 &x_val,
-                publickey,
                 encrypted_share.unwrap(),
                 response.unwrap(),
+                blinding_response.unwrap(),
                 &distribute_sharesbox.challenge,
                 &mut challenge_hasher,
             );

@@ -5,7 +5,7 @@
 [![Crates.io](https://img.shields.io/crates/v/mpvss-rs)](https://crates.io/crates/mpvss-rs)
 [![License](https://img.shields.io/crates/l/mpvss-rs)](https://github.com/AlexiaChen/mpvss-rs)
 
-The library implements a simple PVSS scheme in Rust with support for multiple cryptographic groups through a generic trait abstraction.
+The library implements a non-interactive, publicly verifiable secret sharing scheme in Rust with support for multiple cryptographic groups through a generic trait abstraction. The current protocol follows Tang, Pei, Liu, and He's information-theoretic PVSS construction, using Pedersen-style commitments and generalized Chaum-Pedersen proofs.
 
 ## What is PVSS?
 
@@ -14,6 +14,14 @@ Secret sharing means a dealer can break a secret into secret shares among a grou
 In addition to the plain secret sharing scheme PVSS adds verifiability in the following way: All the parts the secret is split into are encrypted with the receivers' public keys respectively. The dealer publishes all the encrypted shares along with a non-interactive zero-knowledge proof that allows everbody (not only the receiving participants) to verify that the decrypted shares indeed can be used to reconstruct the secret. The participants then decrypt all their shares and exchange them along with another non-interactive zero-knowledge proof that allows the receiving participant to verify that the share is actually the result of the decryption.
 
 Thus PVSS can be used to share a secret among a group of participants so that either the secret can be reconstructed by the participants who all play fair or a participant that received a faked share can identify the malicious party.
+
+## Implemented Scheme
+
+This implementation is based on:
+
+- Chunming Tang, Dingyi Pei, Zhuojun Liu, and Yong He. [Non-Interactive and Information-Theoretic Secure Publicly Verifiable Secret Sharing](https://eprint.iacr.org/2004/201.pdf)
+
+Compared with the earlier Schoenmakers-style PVSS construction, this scheme publishes Pedersen commitments `C_j = g^alpha_j h^beta_j` instead of single-base commitments, encrypts shares as `Y_i = y_i1^f(i) y_i2^g(i)`, and verifies the dealer with a generalized DLEQ proof over the two hidden evaluations `(f(i), g(i))`.
 
 ## Build
 
@@ -257,9 +265,11 @@ let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
 - Private keys are generated via `group.generate_private_key()`
 - Uses SHA-512 for hash-to-scalar (wider output for better uniformity)
 
-## Related References:
+## Related References
 
 - Berry Schoenmakers. [A Simple Publicly Verifiable Secret Sharing Scheme and its Application to Electronic Voting](https://www.win.tue.nl/~berry/papers/crypto99.pdf)
+
+- Torben Pryds Pedersen. [Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing](https://link.springer.com/content/pdf/10.1007%2F3-540-46766-1_9.pdf)
 
 - Adi Shamir. [How to share a secret](http://users.cms.caltech.edu/~vidick/teaching/101_crypto/Shamir1979.pdf)
 
@@ -269,15 +279,9 @@ let r1 = p1.reconstruct(&share_boxs, &distribute_shares_box).unwrap();
 
 - bitcoinwiki-org. [Publicly Verifiable Secret Sharing](https://en.bitcoinwiki.org/wiki/Publicly_Verifiable_Secret_Sharing)
 
-## Non-Related References
-
-Because the ploynomial commitments does not Pedersen commitment and DLEQ is only computaional secure, not information-theoretic secure in this project.
+## Supporting References
 
 - crypto-stackexchange. [What is a Pedersen commitment?](https://crypto.stackexchange.com/questions/64437/what-is-a-pedersen-commitment)
-
-- Torben Pryds Pedersen. [Non-Interactive and Information-Theoretic Secure Verifiable Secret Sharing](https://link.springer.com/content/pdf/10.1007%2F3-540-46766-1_9.pdf)
-
-- Chunming Tang. Dingyi Pei. [Non-Interactive and Information-Theoretic Secure Publicly Verifiable Secret Sharing](https://eprint.iacr.org/2004/201.pdf)
 
 ## License
 Dual-licensed to be compatible with the Rust project.

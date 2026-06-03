@@ -15,10 +15,12 @@
 
 use k256::elliptic_curve::FieldBytes;
 use k256::elliptic_curve::bigint::U256;
+use k256::elliptic_curve::ff::PrimeField;
 use k256::elliptic_curve::group::GroupEncoding;
 use k256::elliptic_curve::ops::Reduce;
+use k256::elliptic_curve::sec1::FromEncodedPoint;
 
-use k256::{AffinePoint, ProjectivePoint, Scalar, Secp256k1};
+use k256::{AffinePoint, EncodedPoint, ProjectivePoint, Scalar, Secp256k1};
 
 use sha2::{Digest, Sha256};
 
@@ -27,6 +29,7 @@ use std::sync::Arc;
 use crate::group::Group;
 
 use num_bigint::BigInt;
+use num_integer::Integer;
 
 /// secp256k1 elliptic curve group (Bitcoin's curve)
 ///
@@ -37,6 +40,10 @@ use num_bigint::BigInt;
 
 pub struct Secp256k1Group {
     order: BigInt,
+    generator: AffinePoint,
+    blinding_generator: AffinePoint,
+    commitment_generator: AffinePoint,
+    commitment_blinding_generator: AffinePoint,
 }
 
 impl Secp256k1Group {
@@ -51,7 +58,52 @@ impl Secp256k1Group {
         ];
         let order = BigInt::from_bytes_be(num_bigint::Sign::Plus, &order_bytes);
 
-        Arc::new(Secp256k1Group { order })
+        // Paper reference: Section 1 system parameters.  The protocol needs
+        // independent bases `g, h, G, H`; domain-separated hash-to-curve keeps
+        // those bases deterministic while avoiding a known relation between
+        // the commitment and masking generators.
+        Arc::new(Secp256k1Group {
+            order,
+            generator: Self::hash_to_point(
+                b"mpvss-rs/secp256k1/main-generator/G",
+            ),
+            blinding_generator: Self::hash_to_point(
+                b"mpvss-rs/secp256k1/main-generator/H",
+            ),
+            commitment_generator: Self::hash_to_point(
+                b"mpvss-rs/secp256k1/commitment-generator/g",
+            ),
+            commitment_blinding_generator: Self::hash_to_point(
+                b"mpvss-rs/secp256k1/commitment-generator/h",
+            ),
+        })
+    }
+
+    fn hash_to_point(domain: &[u8]) -> AffinePoint {
+        // Try-and-increment hash-to-curve for deterministic independent
+        // generators.  secp256k1 has cofactor 1, so any non-identity affine
+        // curve point is in the prime-order group used by the protocol.
+        for counter in 0_u64.. {
+            let mut hasher = Sha256::new();
+            hasher.update(domain);
+            hasher.update(counter.to_be_bytes());
+            let digest = hasher.finalize();
+
+            let mut bytes = [0_u8; 33];
+            bytes[0] = 0x02;
+            bytes[1..].copy_from_slice(&digest[..32]);
+
+            if let Ok(encoded) = EncodedPoint::from_bytes(bytes) {
+                let point = AffinePoint::from_encoded_point(&encoded);
+                if bool::from(point.is_some()) {
+                    let point = point.unwrap();
+                    if point != AffinePoint::IDENTITY {
+                        return point;
+                    }
+                }
+            }
+        }
+        unreachable!("counter loop must find a curve point")
     }
 }
 
@@ -76,12 +128,20 @@ impl Group for Secp256k1Group {
     }
 
     fn generator(&self) -> Self::Element {
-        AffinePoint::GENERATOR
+        self.generator
+    }
+
+    fn blinding_generator(&self) -> Self::Element {
+        self.blinding_generator
     }
 
     fn subgroup_generator(&self) -> Self::Element {
         // For prime-order groups, main generator and subgroup generator are the same
-        AffinePoint::GENERATOR
+        self.commitment_generator
+    }
+
+    fn subgroup_blinding_generator(&self) -> Self::Element {
+        self.commitment_blinding_generator
     }
 
     fn identity(&self) -> Self::Element {
@@ -156,18 +216,23 @@ impl Group for Secp256k1Group {
     }
 
     fn generate_private_key(&self) -> Self::Scalar {
-        // Generate random bytes using rand 0.5's thread_rng
-        let mut bytes = [0u8; 32];
-        for byte in &mut bytes {
-            *byte = rand::random::<u8>();
+        loop {
+            // Generate random bytes using rand 0.5's thread_rng
+            let mut bytes = [0u8; 32];
+            for byte in &mut bytes {
+                *byte = rand::random::<u8>();
+            }
+            // Reduce modulo curve order to avoid invalid scalar rejection
+            let scalar = Scalar::reduce(U256::from_be_slice(&bytes));
+            if scalar != Scalar::ZERO {
+                return scalar;
+            }
         }
-        // Reduce modulo curve order to avoid invalid scalar rejection
-        Scalar::reduce(U256::from_be_slice(&bytes))
     }
 
     fn generate_public_key(&self, private_key: &Self::Scalar) -> Self::Element {
         // Public key = private_key * G (scalar multiplication)
-        (AffinePoint::GENERATOR * private_key).into()
+        self.exp(&self.generator, private_key)
     }
 
     fn scalar_mul(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar {
@@ -185,6 +250,19 @@ impl Secp256k1Group {
     /// Get the curve order as BigInt for use in modular arithmetic
     pub fn order_as_bigint(&self) -> &BigInt {
         &self.order
+    }
+
+    /// Convert a BigInt into a scalar modulo the curve order.
+    pub fn bigint_to_scalar(&self, value: &BigInt) -> Scalar {
+        let value = value.mod_floor(&self.order);
+        let bytes = value.to_bytes_be().1;
+        let mut field_bytes = FieldBytes::<Secp256k1>::default();
+        if bytes.len() < 32 {
+            field_bytes[32 - bytes.len()..].copy_from_slice(&bytes);
+        } else {
+            field_bytes.copy_from_slice(&bytes[bytes.len() - 32..]);
+        }
+        Scalar::from_repr(field_bytes).unwrap()
     }
 }
 

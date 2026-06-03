@@ -15,19 +15,15 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use crate::dleq::DLEQ;
+use crate::dleq::{DLEQ, DLEQ2};
 use crate::group::Group;
 use crate::groups::ModpGroup;
 use crate::polynomial::Polynomial;
-use crate::sharebox::{DistributionSharesBox, ShareBox};
+use crate::sharebox::{DistributionSharesBox, PublicKey, ShareBox};
 
 // secp256k1-specific imports (only available when feature is enabled)
 
 use crate::groups::Secp256k1Group;
-
-use k256::elliptic_curve::FieldBytes;
-
-use k256::elliptic_curve::ff::PrimeField;
 
 use k256::{AffinePoint, Scalar};
 
@@ -64,7 +60,7 @@ use curve25519_dalek::scalar::Scalar as RistrettoScalar;
 pub struct Participant<G: Group> {
     group: Arc<G>,
     pub privatekey: G::Scalar,
-    pub publickey: G::Element,
+    pub publickey: PublicKey<G>,
 }
 
 // Manual Clone implementation that doesn't require G: Clone
@@ -142,7 +138,10 @@ impl<G: Group> Participant<G> {
         G::Element: Default,
     {
         self.privatekey = self.group.generate_private_key();
-        self.publickey = self.group.generate_public_key(&self.privatekey);
+        let primary = self.group.generate_public_key(&self.privatekey);
+        let secondary =
+            self.group.generate_blinding_public_key(&self.privatekey);
+        self.publickey = PublicKey::new(primary, secondary);
     }
 }
 
@@ -160,83 +159,116 @@ impl Participant<ModpGroup> {
     pub fn distribute_secret(
         &mut self,
         secret: &BigInt,
-        publickeys: &[BigInt],
+        publickeys: &[PublicKey<ModpGroup>],
         threshold: u32,
     ) -> DistributionSharesBox<ModpGroup> {
         assert!(threshold <= publickeys.len() as u32);
 
         // Group generators
-        let subgroup_gen = self.group.subgroup_generator();
+        let commitment_gen = self.group.subgroup_generator();
+        let commitment_blinding_gen = self.group.subgroup_blinding_generator();
         let main_gen = self.group.generator();
-        let group_order = self.group.order();
+        let main_blinding_gen = self.group.blinding_generator();
+        let subgroup_order = self.group.subgroup_order();
 
-        // Generate random polynomial (coefficients are scalars in Z_q)
+        // Paper reference: Section 5.1, Distribution.  The improved scheme
+        // samples two degree-(t-1) polynomials: `f(x)` for the secret exponent
+        // and `g(x)` for the Pedersen hiding exponent.
         let mut polynomial = Polynomial::new();
-        polynomial.init((threshold - 1) as i32, group_order);
+        polynomial.init((threshold - 1) as i32, subgroup_order);
+        let mut blinding_polynomial = Polynomial::new();
+        blinding_polynomial.init((threshold - 1) as i32, subgroup_order);
 
         // Data structures
         let mut commitments: Vec<BigInt> = Vec::new();
         let mut positions: HashMap<Vec<u8>, i64> = HashMap::new();
-        let mut x: HashMap<Vec<u8>, BigInt> = HashMap::new();
         let mut shares: HashMap<Vec<u8>, BigInt> = HashMap::new();
         let mut challenge_hasher = Sha256::new();
 
         let mut sampling_points: HashMap<Vec<u8>, BigInt> = HashMap::new();
-        let mut dleq_w: HashMap<Vec<u8>, BigInt> = HashMap::new();
+        let mut blinding_sampling_points: HashMap<Vec<u8>, BigInt> =
+            HashMap::new();
+        let mut dleq_w1: HashMap<Vec<u8>, BigInt> = HashMap::new();
+        let mut dleq_w2: HashMap<Vec<u8>, BigInt> = HashMap::new();
         let mut position: i64 = 1;
 
-        // Calculate commitments C_j = g^a_j using group.exp()
+        // Paper reference: Section 5.1, Distribution.  Each coefficient pair
+        // `(alpha_j, beta_j)` is published only through the Pedersen
+        // commitment `C_j = g^alpha_j h^beta_j`, replacing the older
+        // Feldman/Schoenmakers-style `g^alpha_j` commitment.
         for j in 0..threshold {
             let coeff = &polynomial.coefficients[j as usize];
-            let commitment = self.group.exp(&subgroup_gen, coeff);
+            let blinding_coeff = &blinding_polynomial.coefficients[j as usize];
+            let commitment = self.group.mul(
+                &self.group.exp(&commitment_gen, coeff),
+                &self.group.exp(&commitment_blinding_gen, blinding_coeff),
+            );
             commitments.push(commitment);
         }
 
         // Calculate encrypted shares for each participant
         for pubkey in publickeys {
-            let pubkey_bytes = self.group.element_to_bytes(pubkey);
+            let pubkey_bytes = pubkey.to_bytes(self.group.as_ref());
             positions.insert(pubkey_bytes.clone(), position);
 
-            // P(position) mod order (scalar arithmetic)
+            // Paper reference: Section 5.1.  Participant i receives the
+            // polynomial evaluations `f(i)` and `g(i)` only in encrypted group
+            // form; they are never sent as scalars.
             let pos_scalar = &BigInt::from(position);
-            let secret_share = polynomial.get_value(pos_scalar) % group_order;
+            let secret_share =
+                polynomial.get_value(pos_scalar).mod_floor(subgroup_order);
+            let blinding_share = blinding_polynomial
+                .get_value(pos_scalar)
+                .mod_floor(subgroup_order);
             sampling_points.insert(pubkey_bytes.clone(), secret_share.clone());
+            blinding_sampling_points
+                .insert(pubkey_bytes.clone(), blinding_share.clone());
 
-            // Calculate X_i = g^P(i) using commitments and group operations
-            // X_i = ∏_{j=0}^{t-1} C_j^{i^j} where C_j are commitments
+            // Paper reference: Section 5.1, verifier-side recomputation of
+            // `X_i`.  Expanding the commitments gives
+            // `X_i = product C_j^(i^j) = g^f(i) h^g(i)`.
             let mut x_val = self.group.identity();
             let mut exponent = BigInt::one();
             for j in 0..threshold {
                 let c_j_pow =
                     self.group.exp(&commitments[j as usize], &exponent);
                 x_val = self.group.mul(&x_val, &c_j_pow);
-                exponent =
-                    self.group.scalar_mul(&exponent, pos_scalar) % group_order;
+                exponent = self.group.scalar_mul(&exponent, pos_scalar);
             }
-            x.insert(pubkey_bytes.clone(), x_val.clone());
 
-            // Calculate Y_i = y_i^P(i) (encrypted share) using group.exp()
-            let encrypted_secret_share = self.group.exp(pubkey, &secret_share);
+            // Paper reference: Section 5.1, encrypted share equation:
+            // `Y_i = y_i1^f(i) y_i2^g(i)`.  Since both public-key components
+            // use the same private key, the holder can decrypt this to
+            // `G^f(i) H^g(i)` by exponentiating with `1/x_i`.
+            let encrypted_secret_share = self.group.mul(
+                &self.group.exp(pubkey.primary(), &secret_share),
+                &self.group.exp(pubkey.secondary(), &blinding_share),
+            );
             shares.insert(pubkey_bytes.clone(), encrypted_secret_share.clone());
 
-            // Generate DLEQ proof: DLEQ(g, X_i, y_i, Y_i)
-            let witness = self.group.generate_private_key();
-            let mut dleq = DLEQ::new(self.group.clone());
-            dleq.init(
-                subgroup_gen.clone(),
-                x_val.clone(),
-                pubkey.clone(),
-                encrypted_secret_share.clone(),
-                secret_share.clone(),
-                witness.clone(),
-            );
-            dleq_w.insert(pubkey_bytes.clone(), witness);
-
-            // Update transcript hash via shared DLEQ helper.
-            let a1 = dleq.get_a1();
-            let a2 = dleq.get_a2();
-            DLEQ::<ModpGroup>::append_transcript_hash(
+            // Paper reference: Sections 4 and 5.1.  The dealer proves that
+            // the same hidden pair `(f(i), g(i))` opens both `X_i` and `Y_i`,
+            // using the generalized Chaum-Pedersen proof.
+            let witness1 = self.group.generate_private_key();
+            let witness2 = self.group.generate_private_key();
+            let (a1, a2) = DLEQ2::<ModpGroup>::prover_commitments(
                 self.group.as_ref(),
+                &commitment_gen,
+                &commitment_blinding_gen,
+                pubkey.primary(),
+                pubkey.secondary(),
+                &witness1,
+                &witness2,
+            );
+            dleq_w1.insert(pubkey_bytes.clone(), witness1);
+            dleq_w2.insert(pubkey_bytes.clone(), witness2);
+
+            DLEQ2::<ModpGroup>::append_transcript_hash(
+                self.group.as_ref(),
+                &commitment_gen,
+                &commitment_blinding_gen,
+                pubkey.primary(),
+                pubkey.secondary(),
                 &x_val,
                 &encrypted_secret_share,
                 &a1,
@@ -247,25 +279,51 @@ impl Participant<ModpGroup> {
             position += 1;
         }
 
-        // Compute common challenge using group operations
+        // Paper reference: Section 5.1.  All participant proofs are folded
+        // into one Fiat-Shamir challenge, matching the paper's "n-fold
+        // parallel composition" with a common challenge.
         let challenge_hash = challenge_hasher.finalize();
         let challenge = self.group.hash_to_scalar(&challenge_hash);
 
-        // Compute responses using scalar arithmetic
+        // Paper reference: Section 4 generalized proof.  Each participant
+        // gets two responses, one for `f(i)` and one for `g(i)`.
         let mut responses: HashMap<Vec<u8>, BigInt> = HashMap::new();
+        let mut blinding_responses: HashMap<Vec<u8>, BigInt> = HashMap::new();
         for pubkey in publickeys {
-            let pubkey_bytes = self.group.element_to_bytes(pubkey);
+            let pubkey_bytes = pubkey.to_bytes(self.group.as_ref());
             let alpha = sampling_points.get(&pubkey_bytes).unwrap();
-            let w_i = dleq_w.get(&pubkey_bytes).unwrap();
-            let alpha_c =
-                self.group.scalar_mul(alpha, &challenge) % group_order;
-            let response = self.group.scalar_sub(w_i, &alpha_c) % group_order;
+            let beta = blinding_sampling_points.get(&pubkey_bytes).unwrap();
+            let w1_i = dleq_w1.get(&pubkey_bytes).unwrap();
+            let w2_i = dleq_w2.get(&pubkey_bytes).unwrap();
+            let (response, blinding_response) = DLEQ2::<ModpGroup>::responses(
+                self.group.as_ref(),
+                w1_i,
+                w2_i,
+                alpha,
+                beta,
+                &challenge,
+            );
             responses.insert(pubkey_bytes, response);
+            blinding_responses.insert(
+                pubkey.to_bytes(self.group.as_ref()),
+                blinding_response,
+            );
         }
 
-        // Compute U = secret XOR H(G^s) using group.exp()
-        let s = polynomial.get_value(&BigInt::zero()) % group_order;
-        let g_s = self.group.exp(&main_gen, &s);
+        // Paper reference: Section 5.1.  The shared random value is
+        // `S = G^s1 H^s2` where `s1 = f(0)` and `s2 = g(0)`.  This crate keeps
+        // the existing hybrid encoding and masks the user secret with
+        // `Hash(S)`.
+        let s1 = polynomial
+            .get_value(&BigInt::zero())
+            .mod_floor(subgroup_order);
+        let s2 = blinding_polynomial
+            .get_value(&BigInt::zero())
+            .mod_floor(subgroup_order);
+        let g_s = self.group.mul(
+            &self.group.exp(&main_gen, &s1),
+            &self.group.exp(&main_blinding_gen, &s2),
+        );
         let sha256_hash = Sha256::digest(self.group.element_to_bytes(&g_s));
         let hash_biguint = BigUint::from_bytes_be(&sha256_hash[..])
             .mod_floor(&self.group.modulus().to_biguint().unwrap());
@@ -280,6 +338,7 @@ impl Participant<ModpGroup> {
             publickeys,
             &challenge,
             responses,
+            blinding_responses,
             &u.to_bigint().unwrap(),
         );
         shares_box
@@ -297,29 +356,35 @@ impl Participant<ModpGroup> {
         private_key: &BigInt,
         w: &BigInt,
     ) -> Option<ShareBox<ModpGroup>> {
-        use crate::util::Util;
+        let main_gen = self
+            .group
+            .mul(&self.group.generator(), &self.group.blinding_generator());
 
-        let main_gen = self.group.generator();
-        let group_order = self.group.order();
-
-        // Generate public key from private key using group method
-        let public_key = self.group.generate_public_key(private_key);
+        // Generate registered public key from private key using group methods.
+        let public_key = PublicKey::new(
+            self.group.generate_public_key(private_key),
+            self.group.generate_blinding_public_key(private_key),
+        );
+        let combined_public_key = public_key.combined(self.group.as_ref());
 
         // Get encrypted share from distribution box
-        let pubkey_bytes = self.group.element_to_bytes(&public_key);
+        let pubkey_bytes = public_key.to_bytes(self.group.as_ref());
         let encrypted_secret_share = shares_box.shares.get(&pubkey_bytes)?;
 
-        // Decryption: S_i = Y_i^(1/x_i)
-        // Note: This requires modular inverse which is not a group operation
-        let privkey_inverse = Util::mod_inverse(private_key, group_order)?;
+        // Paper reference: Section 5.1, Reconstruction.  From
+        // `Y_i = (G^x_i)^f(i) (H^x_i)^g(i)`, exponentiating by `1/x_i`
+        // yields the released share `S_i = G^f(i) H^g(i)`.
+        let privkey_inverse = self.group.scalar_inverse(private_key)?;
         let decrypted_share =
             self.group.exp(encrypted_secret_share, &privkey_inverse);
 
-        // Generate DLEQ proof: DLEQ(G, publickey, decrypted_share, encrypted_secret_share)
+        // Paper reference: Section 5.1, proof of correct decryption.  The
+        // text denotes this as a DLEQ proof over base `GH`, combined public
+        // key `y_i1 y_i2`, released share `S_i`, and ciphertext `Y_i`.
         let mut dleq = DLEQ::new(self.group.clone());
         dleq.init(
             main_gen.clone(),
-            public_key.clone(),
+            combined_public_key.clone(),
             decrypted_share.clone(),
             encrypted_secret_share.clone(),
             private_key.clone(),
@@ -332,7 +397,7 @@ impl Participant<ModpGroup> {
         let a2 = dleq.get_a2();
         DLEQ::<ModpGroup>::append_transcript_hash(
             self.group.as_ref(),
-            &public_key,
+            &combined_public_key,
             encrypted_secret_share,
             &a1,
             &a2,
@@ -362,12 +427,15 @@ impl Participant<ModpGroup> {
         &self,
         sharebox: &ShareBox<ModpGroup>,
         distribution_sharebox: &DistributionSharesBox<ModpGroup>,
-        publickey: &BigInt,
+        publickey: &PublicKey<ModpGroup>,
     ) -> bool {
-        let main_gen = self.group.generator();
+        let main_gen = self
+            .group
+            .mul(&self.group.generator(), &self.group.blinding_generator());
+        let combined_public_key = publickey.combined(self.group.as_ref());
 
         // Get encrypted share from distribution box
-        let pubkey_bytes = self.group.element_to_bytes(publickey);
+        let pubkey_bytes = publickey.to_bytes(self.group.as_ref());
         let encrypted_share =
             match distribution_sharebox.shares.get(&pubkey_bytes) {
                 Some(s) => s,
@@ -377,7 +445,7 @@ impl Participant<ModpGroup> {
         // Verify share DLEQ proof through shared verifier object path.
         let mut dleq = DLEQ::<ModpGroup>::new(self.group.clone());
         dleq.g1 = main_gen;
-        dleq.h1 = publickey.clone();
+        dleq.h1 = combined_public_key;
         dleq.g2 = sharebox.share.clone();
         dleq.h2 = encrypted_share.clone();
         dleq.c = Some(sharebox.challenge.clone());
@@ -400,26 +468,30 @@ impl Participant<ModpGroup> {
         &self,
         distribute_sharesbox: &DistributionSharesBox<ModpGroup>,
     ) -> bool {
-        let subgroup_gen = self.group.subgroup_generator();
-        let group_order = self.group.order();
+        let commitment_gen = self.group.subgroup_generator();
+        let commitment_blinding_gen = self.group.subgroup_blinding_generator();
         let mut challenge_hasher = Sha256::new();
 
         // Verify each participant's encrypted share and accumulate hash
         for publickey in &distribute_sharesbox.publickeys {
-            let pubkey_bytes = self.group.element_to_bytes(publickey);
+            let pubkey_bytes = publickey.to_bytes(self.group.as_ref());
             let position = distribute_sharesbox.positions.get(&pubkey_bytes);
             let response = distribute_sharesbox.responses.get(&pubkey_bytes);
+            let blinding_response =
+                distribute_sharesbox.blinding_responses.get(&pubkey_bytes);
             let encrypted_share =
                 distribute_sharesbox.shares.get(&pubkey_bytes);
 
             if position.is_none()
                 || response.is_none()
+                || blinding_response.is_none()
                 || encrypted_share.is_none()
             {
                 return false;
             }
 
-            // Calculate X_i = ∏_{j=0}^{t-1} C_j^{i^j} using group operations
+            // Paper reference: Section 5.1, public verification recomputes
+            // `X_i = product C_j^(i^j)` from the public commitments.
             let mut x_val = self.group.identity();
             let mut exponent = BigInt::one();
             for j in 0..distribute_sharesbox.commitments.len() {
@@ -429,19 +501,19 @@ impl Participant<ModpGroup> {
                 x_val = self.group.mul(&x_val, &c_j_pow);
                 exponent = self
                     .group
-                    .scalar_mul(&exponent, &BigInt::from(*position.unwrap()))
-                    % group_order;
+                    .scalar_mul(&exponent, &BigInt::from(*position.unwrap()));
             }
 
-            // Verify DLEQ proof for this participant using shared helper and
-            // append transcript.
-            let _ = DLEQ::<ModpGroup>::verifier_update_hash(
+            let _ = DLEQ2::<ModpGroup>::verifier_update_hash(
                 self.group.as_ref(),
-                &subgroup_gen,
+                &commitment_gen,
+                &commitment_blinding_gen,
+                publickey.primary(),
+                publickey.secondary(),
                 &x_val,
-                publickey,
                 encrypted_share.unwrap(),
                 response.unwrap(),
+                blinding_response.unwrap(),
                 &distribute_sharesbox.challenge,
                 &mut challenge_hasher,
             );
@@ -476,12 +548,14 @@ impl Participant<ModpGroup> {
         let mut shares: BTreeMap<i64, BigInt> = BTreeMap::new();
         for share_box in share_boxes.iter() {
             let pubkey_bytes =
-                self.group.element_to_bytes(&share_box.publickey);
+                share_box.publickey.to_bytes(self.group.as_ref());
             let position = distribute_share_box.positions.get(&pubkey_bytes)?;
             shares.insert(*position, share_box.share.clone());
         }
 
-        // Compute Lagrange factors and G^s = ∏ S_i^λ_i
+        // Paper reference: Section 5.1, Pooling.  Lagrange interpolation on
+        // the released group elements recovers
+        // `product S_i^lambda_i = G^f(0) H^g(0)`.
         let mut secret = self.group.identity();
         let values: Vec<i64> = shares.keys().copied().collect();
         let shares_vec: Vec<(i64, BigInt)> = shares.into_iter().collect();
@@ -570,6 +644,7 @@ mod tests {
     use super::*;
     use crate::groups::ModpGroup;
     use crate::participant::Participant;
+    use k256::elliptic_curve::{FieldBytes, ff::PrimeField};
     use num_bigint::RandBigInt;
 
     #[test]
@@ -767,7 +842,7 @@ mod tests {
         let secret_message = String::from("Hello secp256k1 PVSS!");
         let secret = BigUint::from_bytes_be(secret_message.as_bytes());
 
-        let publickeys: Vec<k256::AffinePoint> = vec![
+        let publickeys = vec![
             p1.publickey.clone(),
             p2.publickey.clone(),
             p3.publickey.clone(),
@@ -851,7 +926,7 @@ mod tests {
         let secret_message = String::from("Threshold test secp256k1!");
         let secret = BigUint::from_bytes_be(secret_message.as_bytes());
 
-        let publickeys: Vec<k256::AffinePoint> = vec![
+        let publickeys = vec![
             p1.publickey.clone(),
             p2.publickey.clone(),
             p3.publickey.clone(),
@@ -986,7 +1061,7 @@ mod tests {
         // g2 = some public key, h2 = g2^alpha
         let mut p2 = Participant::with_arc(group.clone());
         p2.initialize();
-        let g2 = p2.publickey;
+        let g2 = *p2.publickey.primary();
         let h2 = group.exp(&g2, &alpha);
 
         // Create DLEQ
@@ -1025,8 +1100,7 @@ mod tests {
 
         let secret = BigUint::from_bytes_be(b"DLEQ test secp256k1");
 
-        let publickeys: Vec<k256::AffinePoint> =
-            vec![p1.publickey.clone(), p2.publickey.clone()];
+        let publickeys = vec![p1.publickey.clone(), p2.publickey.clone()];
         let threshold = 2;
 
         // Distribute secret
@@ -1094,23 +1168,28 @@ impl Participant<Secp256k1Group> {
     pub fn distribute_secret(
         &mut self,
         secret: &BigInt,
-        publickeys: &[AffinePoint],
+        publickeys: &[PublicKey<Secp256k1Group>],
         threshold: u32,
     ) -> DistributionSharesBox<Secp256k1Group> {
         assert!(threshold <= publickeys.len() as u32);
 
+        // Paper reference: Section 5.1.  This is the same improved PVSS
+        // algorithm as the MODP implementation above.  Because secp256k1 is
+        // written additively, the paper's `g^a h^b` appears here as
+        // `a*g + b*h`, and products of shares are point additions.
+
         // Group generators
-        let subgroup_gen = self.group.subgroup_generator();
+        let commitment_gen = self.group.subgroup_generator();
+        let commitment_blinding_gen = self.group.subgroup_blinding_generator();
         let main_gen = self.group.generator();
-        let _group_order = self.group.order(); // Stored for API compatibility, actual order from order_as_bigint()
+        let main_blinding_gen = self.group.blinding_generator();
 
-        // Generate random polynomial (coefficients are BigInt, converted to Scalar later)
+        // Generate two random polynomials over the curve scalar field.
         let mut polynomial = Polynomial::new();
-        // Use BigInt for polynomial arithmetic (compatible with Polynomial module)
-        // For secp256k1, use order_as_bigint() to get the actual curve order as BigInt
-
         let group_order_bigint = self.group.order_as_bigint().clone();
         polynomial.init((threshold - 1) as i32, &group_order_bigint);
+        let mut blinding_polynomial = Polynomial::new();
+        blinding_polynomial.init((threshold - 1) as i32, &group_order_bigint);
 
         // Data structures - use Vec<u8> keys (serialized points) since AffinePoint doesn't implement Hash
         let mut commitments: Vec<AffinePoint> = Vec::new();
@@ -1122,53 +1201,51 @@ impl Participant<Secp256k1Group> {
 
         let mut sampling_points: std::collections::HashMap<Vec<u8>, Scalar> =
             std::collections::HashMap::new();
-        let mut dleq_w: std::collections::HashMap<Vec<u8>, Scalar> =
+        let mut blinding_sampling_points: std::collections::HashMap<
+            Vec<u8>,
+            Scalar,
+        > = std::collections::HashMap::new();
+        let mut dleq_w1: std::collections::HashMap<Vec<u8>, Scalar> =
+            std::collections::HashMap::new();
+        let mut dleq_w2: std::collections::HashMap<Vec<u8>, Scalar> =
             std::collections::HashMap::new();
         let mut position: i64 = 1;
 
-        // Calculate commitments C_j = a_j * g (scalar multiplication)
+        // Calculate Pedersen commitments C_j = alpha_j*g + beta_j*h.
         for j in 0..threshold {
-            let coeff_bigint = &polynomial.coefficients[j as usize];
-            // Convert BigInt coefficient to bytes (big-endian) and ensure exactly 32 bytes
-            // k256 Scalar::from_repr expects big-endian representation
-            let coeff_bytes = coeff_bigint.to_bytes_be().1;
-            let mut field_bytes = FieldBytes::<k256::Secp256k1>::default();
-            if coeff_bytes.len() < 32 {
-                // Right-align for big-endian (copy to the end of the array)
-                field_bytes[32 - coeff_bytes.len()..]
-                    .copy_from_slice(&coeff_bytes);
-            } else {
-                field_bytes.copy_from_slice(&coeff_bytes[..32]);
-            }
-            let coeff = Scalar::from_repr(field_bytes).unwrap();
-            let commitment = self.group.exp(&subgroup_gen, &coeff);
+            let coeff = self
+                .group
+                .bigint_to_scalar(&polynomial.coefficients[j as usize]);
+            let blinding_coeff = self.group.bigint_to_scalar(
+                &blinding_polynomial.coefficients[j as usize],
+            );
+            let commitment = self.group.mul(
+                &self.group.exp(&commitment_gen, &coeff),
+                &self.group.exp(&commitment_blinding_gen, &blinding_coeff),
+            );
             commitments.push(commitment);
         }
 
         // Calculate encrypted shares for each participant
         for pubkey in publickeys.iter() {
-            let pubkey_bytes = self.group.element_to_bytes(pubkey);
+            let pubkey_bytes = pubkey.to_bytes(self.group.as_ref());
             positions.insert(pubkey_bytes.clone(), position);
 
-            // P(position) as Scalar
+            // f(position), g(position) as Scalars.
             let pos_scalar = BigInt::from(position);
-            let secret_share_bigint = polynomial.get_value(&pos_scalar);
-            // CRITICAL: Must take mod order BEFORE converting to Scalar
-            let secret_share_mod = &secret_share_bigint % &group_order_bigint;
-            // Use big-endian representation for k256 Scalar
-            let secret_share_bytes = secret_share_mod.to_bytes_be().1;
-            let mut field_bytes = FieldBytes::<k256::Secp256k1>::default();
-            if secret_share_bytes.len() < 32 {
-                // Right-align for big-endian
-                field_bytes[32 - secret_share_bytes.len()..]
-                    .copy_from_slice(&secret_share_bytes);
-            } else {
-                field_bytes.copy_from_slice(&secret_share_bytes[..32]);
-            }
-            let secret_share = Scalar::from_repr(field_bytes).unwrap();
+            let secret_share = self
+                .group
+                .bigint_to_scalar(&polynomial.get_value(&pos_scalar));
+            let blinding_share = self
+                .group
+                .bigint_to_scalar(&blinding_polynomial.get_value(&pos_scalar));
             sampling_points.insert(pubkey_bytes.clone(), secret_share);
-            let witness = self.group.generate_private_key();
-            dleq_w.insert(pubkey_bytes.clone(), witness);
+            blinding_sampling_points
+                .insert(pubkey_bytes.clone(), blinding_share);
+            let witness1 = self.group.generate_private_key();
+            let witness2 = self.group.generate_private_key();
+            dleq_w1.insert(pubkey_bytes.clone(), witness1);
+            dleq_w2.insert(pubkey_bytes.clone(), witness2);
 
             // Calculate X_i = Σ_j (position^j) * C_j (using EC operations)
             let mut x_val = self.group.identity();
@@ -1183,26 +1260,29 @@ impl Participant<Secp256k1Group> {
                 exponent = self.group.scalar_mul(&exponent, &pos_scalar);
             }
 
-            // Calculate Y_i = secret_share * y_i (encrypted share)
-            let encrypted_secret_share = self.group.exp(pubkey, &secret_share);
+            // Y_i = f(i)*y_i1 + g(i)*y_i2.
+            let encrypted_secret_share = self.group.mul(
+                &self.group.exp(pubkey.primary(), &secret_share),
+                &self.group.exp(pubkey.secondary(), &blinding_share),
+            );
             shares.insert(pubkey_bytes.clone(), encrypted_secret_share);
 
-            // Generate DLEQ proof: DLEQ(g, X_i, y_i, Y_i)
-            let mut dleq = DLEQ::new(self.group.clone());
-            dleq.init(
-                subgroup_gen,
-                x_val,
-                *pubkey,
-                encrypted_secret_share,
-                secret_share,
-                witness,
+            let (a1, a2) = DLEQ2::<Secp256k1Group>::prover_commitments(
+                self.group.as_ref(),
+                &commitment_gen,
+                &commitment_blinding_gen,
+                pubkey.primary(),
+                pubkey.secondary(),
+                &witness1,
+                &witness2,
             );
 
-            // Update challenge hash via shared DLEQ helper.
-            let a1 = dleq.get_a1();
-            let a2 = dleq.get_a2();
-            DLEQ::<Secp256k1Group>::append_transcript_hash(
+            DLEQ2::<Secp256k1Group>::append_transcript_hash(
                 self.group.as_ref(),
+                &commitment_gen,
+                &commitment_blinding_gen,
+                pubkey.primary(),
+                pubkey.secondary(),
                 &x_val,
                 &encrypted_secret_share,
                 &a1,
@@ -1220,37 +1300,45 @@ impl Participant<Secp256k1Group> {
         // Compute responses: r_i = w - alpha_i * c
         let mut responses: std::collections::HashMap<Vec<u8>, Scalar> =
             std::collections::HashMap::new();
+        let mut blinding_responses: std::collections::HashMap<Vec<u8>, Scalar> =
+            std::collections::HashMap::new();
         for pubkey in publickeys {
-            let pubkey_bytes = self.group.element_to_bytes(pubkey);
+            let pubkey_bytes = pubkey.to_bytes(self.group.as_ref());
             let alpha = sampling_points.get(&pubkey_bytes).unwrap();
-            let alpha_c = self.group.scalar_mul(alpha, &challenge);
-            let w_i = dleq_w.get(&pubkey_bytes).unwrap();
-            let response = self.group.scalar_sub(w_i, &alpha_c);
-
+            let beta = blinding_sampling_points.get(&pubkey_bytes).unwrap();
+            let w1_i = dleq_w1.get(&pubkey_bytes).unwrap();
+            let w2_i = dleq_w2.get(&pubkey_bytes).unwrap();
+            let (response, blinding_response) =
+                DLEQ2::<Secp256k1Group>::responses(
+                    self.group.as_ref(),
+                    w1_i,
+                    w2_i,
+                    alpha,
+                    beta,
+                    &challenge,
+                );
             responses.insert(pubkey_bytes, response);
+            blinding_responses.insert(
+                pubkey.to_bytes(self.group.as_ref()),
+                blinding_response,
+            );
         }
 
-        // Compute U = secret XOR H(G^s)
-        let s_bigint = polynomial.get_value(&BigInt::zero());
-        let s_bytes = s_bigint.to_bytes_be().1;
-        let mut field_bytes = FieldBytes::<k256::Secp256k1>::default();
-        if s_bytes.len() < 32 {
-            field_bytes[32 - s_bytes.len()..].copy_from_slice(&s_bytes);
-        } else {
-            field_bytes.copy_from_slice(&s_bytes[s_bytes.len() - 32..]);
-        }
-        let s = Scalar::from_repr(field_bytes).unwrap();
-        let g_s = self.group.exp(&main_gen, &s);
+        // Compute U = secret XOR H(G^s1 H^s2).
+        let s1 = self
+            .group
+            .bigint_to_scalar(&polynomial.get_value(&BigInt::zero()));
+        let s2 = self
+            .group
+            .bigint_to_scalar(&blinding_polynomial.get_value(&BigInt::zero()));
+        let g_s = self.group.mul(
+            &self.group.exp(&main_gen, &s1),
+            &self.group.exp(&main_blinding_gen, &s2),
+        );
 
         // Hash the EC point to bytes
         let sha256_hash = Sha256::digest(self.group.element_to_bytes(&g_s));
-        // Convert hash to BigUint and reduce modulo curve order
-        let mut field_bytes2 = FieldBytes::<k256::Secp256k1>::default();
-        let hash_len = sha256_hash.len().min(field_bytes2.len());
-        field_bytes2[32 - hash_len..].copy_from_slice(&sha256_hash[..hash_len]);
-        let hash_scalar = Scalar::from_repr(field_bytes2).unwrap();
-        let hash_bytes = hash_scalar.to_bytes();
-        let hash_biguint = BigUint::from_bytes_be(&hash_bytes);
+        let hash_biguint = BigUint::from_bytes_be(&sha256_hash[..]);
         // For EC, we use the curve order as the modulus for U encoding
 
         let curve_order_bigint = BigUint::from_bytes_be(
@@ -1268,6 +1356,7 @@ impl Participant<Secp256k1Group> {
             publickeys,
             &challenge,
             responses,
+            blinding_responses,
             &u.to_bigint().unwrap(),
         );
         shares_box
@@ -1285,13 +1374,19 @@ impl Participant<Secp256k1Group> {
         private_key: &Scalar,
         w: &Scalar,
     ) -> Option<ShareBox<Secp256k1Group>> {
-        let main_gen = self.group.generator();
+        let main_gen = self
+            .group
+            .mul(&self.group.generator(), &self.group.blinding_generator());
 
-        // Generate public key from private key using group method
-        let public_key = self.group.generate_public_key(private_key);
+        // Generate registered public key from private key using group methods.
+        let public_key = PublicKey::new(
+            self.group.generate_public_key(private_key),
+            self.group.generate_blinding_public_key(private_key),
+        );
+        let combined_public_key = public_key.combined(self.group.as_ref());
 
         // Get encrypted share from distribution box (serialize key for HashMap lookup)
-        let public_key_bytes = self.group.element_to_bytes(&public_key);
+        let public_key_bytes = public_key.to_bytes(self.group.as_ref());
         let encrypted_secret_share =
             shares_box.shares.get(&public_key_bytes)?;
 
@@ -1300,11 +1395,11 @@ impl Participant<Secp256k1Group> {
         let decrypted_share =
             self.group.exp(encrypted_secret_share, &privkey_inverse);
 
-        // Generate DLEQ proof: DLEQ(G, publickey, decrypted_share, encrypted_secret_share)
+        // Prove log_{G+H}(y_i1+y_i2) = log_{S_i}(Y_i).
         let mut dleq = DLEQ::new(self.group.clone());
         dleq.init(
             main_gen,
-            public_key,
+            combined_public_key,
             decrypted_share,
             *encrypted_secret_share,
             *private_key,
@@ -1317,7 +1412,7 @@ impl Participant<Secp256k1Group> {
         let a2 = dleq.get_a2();
         DLEQ::<Secp256k1Group>::append_transcript_hash(
             self.group.as_ref(),
-            &public_key,
+            &combined_public_key,
             encrypted_secret_share,
             &a1,
             &a2,
@@ -1347,12 +1442,15 @@ impl Participant<Secp256k1Group> {
         &self,
         sharebox: &ShareBox<Secp256k1Group>,
         distribution_sharebox: &DistributionSharesBox<Secp256k1Group>,
-        publickey: &AffinePoint,
+        publickey: &PublicKey<Secp256k1Group>,
     ) -> bool {
-        let main_gen = self.group.generator();
+        let main_gen = self
+            .group
+            .mul(&self.group.generator(), &self.group.blinding_generator());
+        let combined_public_key = publickey.combined(self.group.as_ref());
 
         // Get encrypted share from distribution box (serialize key for HashMap lookup)
-        let publickey_bytes = self.group.element_to_bytes(publickey);
+        let publickey_bytes = publickey.to_bytes(self.group.as_ref());
         let encrypted_share =
             match distribution_sharebox.shares.get(&publickey_bytes) {
                 Some(s) => s,
@@ -1362,7 +1460,7 @@ impl Participant<Secp256k1Group> {
         // Verify share DLEQ proof through shared verifier object path.
         let mut dleq = DLEQ::<Secp256k1Group>::new(self.group.clone());
         dleq.g1 = main_gen;
-        dleq.h1 = *publickey;
+        dleq.h1 = combined_public_key;
         dleq.g2 = sharebox.share;
         dleq.h2 = *encrypted_share;
         dleq.c = Some(sharebox.challenge);
@@ -1385,19 +1483,24 @@ impl Participant<Secp256k1Group> {
         &self,
         distribute_sharesbox: &DistributionSharesBox<Secp256k1Group>,
     ) -> bool {
-        let subgroup_gen = self.group.subgroup_generator();
+        let commitment_gen = self.group.subgroup_generator();
+        let commitment_blinding_gen = self.group.subgroup_blinding_generator();
         let mut challenge_hasher = Sha256::new();
 
         // Verify each participant's encrypted share and accumulate hash
         for publickey in distribute_sharesbox.publickeys.iter() {
-            let publickey_bytes = self.group.element_to_bytes(publickey);
+            let publickey_bytes = publickey.to_bytes(self.group.as_ref());
             let position = distribute_sharesbox.positions.get(&publickey_bytes);
             let response = distribute_sharesbox.responses.get(&publickey_bytes);
+            let blinding_response = distribute_sharesbox
+                .blinding_responses
+                .get(&publickey_bytes);
             let encrypted_share =
                 distribute_sharesbox.shares.get(&publickey_bytes);
 
             if position.is_none()
                 || response.is_none()
+                || blinding_response.is_none()
                 || encrypted_share.is_none()
             {
                 return false;
@@ -1405,6 +1508,7 @@ impl Participant<Secp256k1Group> {
 
             let position = *position.unwrap();
             let response = response.unwrap();
+            let blinding_response = blinding_response.unwrap();
             let encrypted_share = encrypted_share.unwrap();
 
             // Calculate X_i = Σ_j (position^j) * C_j using EC operations
@@ -1420,15 +1524,16 @@ impl Participant<Secp256k1Group> {
                 exponent = self.group.scalar_mul(&exponent, &pos_scalar);
             }
 
-            // Verify DLEQ proof for this participant via shared helper and
-            // append transcript.
-            let _ = DLEQ::<Secp256k1Group>::verifier_update_hash(
+            let _ = DLEQ2::<Secp256k1Group>::verifier_update_hash(
                 self.group.as_ref(),
-                &subgroup_gen,
+                &commitment_gen,
+                &commitment_blinding_gen,
+                publickey.primary(),
+                publickey.secondary(),
                 &x_val,
-                publickey,
                 encrypted_share,
                 response,
+                blinding_response,
                 &distribute_sharesbox.challenge,
                 &mut challenge_hasher,
             );
@@ -1465,7 +1570,7 @@ impl Participant<Secp256k1Group> {
             std::collections::HashMap::new();
         for share_box in share_boxes.iter() {
             let publickey_bytes =
-                self.group.element_to_bytes(&share_box.publickey);
+                share_box.publickey.to_bytes(self.group.as_ref());
             let position =
                 distribute_share_box.positions.get(&publickey_bytes)?;
             shares.insert(*position, share_box.share);
@@ -1494,13 +1599,7 @@ impl Participant<Secp256k1Group> {
         // Reconstruct secret = H(G^s) XOR U
         let secret_hash =
             Sha256::digest(self.group.element_to_bytes(&final_secret));
-        // Convert hash to Scalar using from_repr (modular reduction)
-        let mut field_bytes = FieldBytes::<k256::Secp256k1>::default();
-        let hash_len = secret_hash.len().min(field_bytes.len());
-        field_bytes[32 - hash_len..].copy_from_slice(&secret_hash[..hash_len]);
-        let hash_scalar = Scalar::from_repr(field_bytes).unwrap();
-        let hash_bytes = hash_scalar.to_bytes();
-        let hash_biguint = BigUint::from_bytes_be(&hash_bytes);
+        let hash_biguint = BigUint::from_bytes_be(&secret_hash[..]);
         // For EC, we use the curve order as the modulus for U encoding
 
         let scalar_bytes = self.group.order_as_bigint().to_bytes_be().1;
@@ -1573,20 +1672,27 @@ impl Participant<Ristretto255Group> {
     pub fn distribute_secret(
         &mut self,
         secret: &BigInt,
-        publickeys: &[RistrettoPoint],
+        publickeys: &[PublicKey<Ristretto255Group>],
         threshold: u32,
     ) -> DistributionSharesBox<Ristretto255Group> {
         assert!(threshold <= publickeys.len() as u32);
 
-        // Group generators
-        let subgroup_gen = self.group.subgroup_generator();
-        let main_gen = self.group.generator();
-        let _group_order = self.group.order(); // Stored for API compatibility
+        // Paper reference: Section 5.1.  Ristretto255 follows the same
+        // information-theoretic PVSS construction as MODP, expressed in
+        // additive group notation: `g^a h^b` becomes `a*g + b*h`.
 
-        // Generate random polynomial (coefficients are BigInt, converted to Scalar later)
+        // Group generators
+        let commitment_gen = self.group.subgroup_generator();
+        let commitment_blinding_gen = self.group.subgroup_blinding_generator();
+        let main_gen = self.group.generator();
+        let main_blinding_gen = self.group.blinding_generator();
+
+        // Generate two random polynomials over the group scalar field.
         let mut polynomial = Polynomial::new();
         let group_order_bigint = self.group.order_as_bigint().clone();
         polynomial.init((threshold - 1) as i32, &group_order_bigint);
+        let mut blinding_polynomial = Polynomial::new();
+        blinding_polynomial.init((threshold - 1) as i32, &group_order_bigint);
 
         // Data structures - use Vec<u8> keys (serialized points) since RistrettoPoint doesn't implement Hash
         let mut commitments: Vec<RistrettoPoint> = Vec::new();
@@ -1596,35 +1702,50 @@ impl Participant<Ristretto255Group> {
 
         let mut sampling_points: HashMap<Vec<u8>, RistrettoScalar> =
             HashMap::new();
-        let mut dleq_w: HashMap<Vec<u8>, RistrettoScalar> = HashMap::new();
+        let mut blinding_sampling_points: HashMap<Vec<u8>, RistrettoScalar> =
+            HashMap::new();
+        let mut dleq_w1: HashMap<Vec<u8>, RistrettoScalar> = HashMap::new();
+        let mut dleq_w2: HashMap<Vec<u8>, RistrettoScalar> = HashMap::new();
         let mut position: i64 = 1;
 
-        // Calculate commitments C_j = a_j * g (scalar multiplication)
+        // Calculate Pedersen commitments C_j = alpha_j*g + beta_j*h.
         for j in 0..threshold {
             let coeff_bigint = &polynomial.coefficients[j as usize];
-            // Convert BigInt coefficient to Ristretto Scalar
-            // CRITICAL: curve25519-dalek uses little-endian, num_bigint uses big-endian
             let coeff = Ristretto255Group::bigint_to_scalar(coeff_bigint);
-            let commitment = self.group.exp(&subgroup_gen, &coeff);
+            let blinding_coeff = Ristretto255Group::bigint_to_scalar(
+                &blinding_polynomial.coefficients[j as usize],
+            );
+            let commitment = self.group.mul(
+                &self.group.exp(&commitment_gen, &coeff),
+                &self.group.exp(&commitment_blinding_gen, &blinding_coeff),
+            );
             commitments.push(commitment);
         }
 
         // Calculate encrypted shares for each participant
         for pubkey in publickeys {
-            let pubkey_bytes = self.group.element_to_bytes(pubkey);
+            let pubkey_bytes = pubkey.to_bytes(self.group.as_ref());
             positions.insert(pubkey_bytes.clone(), position);
 
-            // P(position) as Scalar
+            // f(position), g(position) as Scalars.
             let pos_scalar = BigInt::from(position);
             let secret_share_bigint = polynomial.get_value(&pos_scalar);
-            // CRITICAL: Must take mod order BEFORE converting to Scalar
             let secret_share_mod = &secret_share_bigint % &group_order_bigint;
-            // Convert to Ristretto Scalar (handles endianness)
             let secret_share =
                 Ristretto255Group::bigint_to_scalar(&secret_share_mod);
+            let blinding_share_bigint =
+                blinding_polynomial.get_value(&pos_scalar);
+            let blinding_share_mod =
+                &blinding_share_bigint % &group_order_bigint;
+            let blinding_share =
+                Ristretto255Group::bigint_to_scalar(&blinding_share_mod);
             sampling_points.insert(pubkey_bytes.clone(), secret_share);
-            let witness = self.group.generate_private_key();
-            dleq_w.insert(pubkey_bytes.clone(), witness);
+            blinding_sampling_points
+                .insert(pubkey_bytes.clone(), blinding_share);
+            let witness1 = self.group.generate_private_key();
+            let witness2 = self.group.generate_private_key();
+            dleq_w1.insert(pubkey_bytes.clone(), witness1);
+            dleq_w2.insert(pubkey_bytes.clone(), witness2);
 
             // Calculate X_i = Σ_j (position^j) * C_j (using EC operations)
             let mut x_val = self.group.identity();
@@ -1641,26 +1762,29 @@ impl Participant<Ristretto255Group> {
                 exponent = self.group.scalar_mul(&exponent, &pos_scalar);
             }
 
-            // Calculate Y_i = secret_share * y_i (encrypted share)
-            let encrypted_secret_share = self.group.exp(pubkey, &secret_share);
+            // Y_i = f(i)*y_i1 + g(i)*y_i2.
+            let encrypted_secret_share = self.group.mul(
+                &self.group.exp(pubkey.primary(), &secret_share),
+                &self.group.exp(pubkey.secondary(), &blinding_share),
+            );
             shares.insert(pubkey_bytes.clone(), encrypted_secret_share);
 
-            // Generate DLEQ proof: DLEQ(g, X_i, y_i, Y_i)
-            let mut dleq = DLEQ::new(self.group.clone());
-            dleq.init(
-                subgroup_gen,
-                x_val,
-                *pubkey,
-                encrypted_secret_share,
-                secret_share,
-                witness,
+            let (a1, a2) = DLEQ2::<Ristretto255Group>::prover_commitments(
+                self.group.as_ref(),
+                &commitment_gen,
+                &commitment_blinding_gen,
+                pubkey.primary(),
+                pubkey.secondary(),
+                &witness1,
+                &witness2,
             );
 
-            // Update challenge hash via shared DLEQ helper.
-            let a1 = dleq.get_a1();
-            let a2 = dleq.get_a2();
-            DLEQ::<Ristretto255Group>::append_transcript_hash(
+            DLEQ2::<Ristretto255Group>::append_transcript_hash(
                 self.group.as_ref(),
+                &commitment_gen,
+                &commitment_blinding_gen,
+                pubkey.primary(),
+                pubkey.secondary(),
                 &x_val,
                 &encrypted_secret_share,
                 &a1,
@@ -1677,20 +1801,39 @@ impl Participant<Ristretto255Group> {
 
         // Compute responses: r_i = w - alpha_i * c
         let mut responses: HashMap<Vec<u8>, RistrettoScalar> = HashMap::new();
+        let mut blinding_responses: HashMap<Vec<u8>, RistrettoScalar> =
+            HashMap::new();
         for pubkey in publickeys {
-            let pubkey_bytes = self.group.element_to_bytes(pubkey);
+            let pubkey_bytes = pubkey.to_bytes(self.group.as_ref());
             let alpha = sampling_points.get(&pubkey_bytes).unwrap();
-            let alpha_c = self.group.scalar_mul(alpha, &challenge);
-            let w_i = dleq_w.get(&pubkey_bytes).unwrap();
-            let response = self.group.scalar_sub(w_i, &alpha_c);
-
+            let beta = blinding_sampling_points.get(&pubkey_bytes).unwrap();
+            let w1_i = dleq_w1.get(&pubkey_bytes).unwrap();
+            let w2_i = dleq_w2.get(&pubkey_bytes).unwrap();
+            let (response, blinding_response) =
+                DLEQ2::<Ristretto255Group>::responses(
+                    self.group.as_ref(),
+                    w1_i,
+                    w2_i,
+                    alpha,
+                    beta,
+                    &challenge,
+                );
             responses.insert(pubkey_bytes, response);
+            blinding_responses.insert(
+                pubkey.to_bytes(self.group.as_ref()),
+                blinding_response,
+            );
         }
 
-        // Compute U = secret XOR H(G^s)
+        // Compute U = secret XOR H(G^s1 H^s2).
         let s_bigint = polynomial.get_value(&BigInt::zero());
-        let s = Ristretto255Group::bigint_to_scalar(&s_bigint);
-        let g_s = self.group.exp(&main_gen, &s);
+        let s1 = Ristretto255Group::bigint_to_scalar(&s_bigint);
+        let s2_bigint = blinding_polynomial.get_value(&BigInt::zero());
+        let s2 = Ristretto255Group::bigint_to_scalar(&s2_bigint);
+        let g_s = self.group.mul(
+            &self.group.exp(&main_gen, &s1),
+            &self.group.exp(&main_blinding_gen, &s2),
+        );
 
         // Hash the EC point to bytes
         let sha256_hash = Sha256::digest(self.group.element_to_bytes(&g_s));
@@ -1711,6 +1854,7 @@ impl Participant<Ristretto255Group> {
             publickeys,
             &challenge,
             responses,
+            blinding_responses,
             &u.to_bigint().unwrap(),
         );
         shares_box
@@ -1728,13 +1872,19 @@ impl Participant<Ristretto255Group> {
         private_key: &RistrettoScalar,
         w: &RistrettoScalar,
     ) -> Option<ShareBox<Ristretto255Group>> {
-        let main_gen = self.group.generator();
+        let main_gen = self
+            .group
+            .mul(&self.group.generator(), &self.group.blinding_generator());
 
-        // Generate public key from private key using group method
-        let public_key = self.group.generate_public_key(private_key);
+        // Generate registered public key from private key using group methods.
+        let public_key = PublicKey::new(
+            self.group.generate_public_key(private_key),
+            self.group.generate_blinding_public_key(private_key),
+        );
+        let combined_public_key = public_key.combined(self.group.as_ref());
 
         // Get encrypted share from distribution box (serialize key for HashMap lookup)
-        let public_key_bytes = self.group.element_to_bytes(&public_key);
+        let public_key_bytes = public_key.to_bytes(self.group.as_ref());
         let encrypted_secret_share =
             shares_box.shares.get(&public_key_bytes)?;
 
@@ -1743,11 +1893,11 @@ impl Participant<Ristretto255Group> {
         let decrypted_share =
             self.group.exp(encrypted_secret_share, &privkey_inverse);
 
-        // Generate DLEQ proof: DLEQ(G, publickey, decrypted_share, encrypted_secret_share)
+        // Prove log_{G+H}(y_i1+y_i2) = log_{S_i}(Y_i).
         let mut dleq = DLEQ::new(self.group.clone());
         dleq.init(
             main_gen,
-            public_key,
+            combined_public_key,
             decrypted_share,
             *encrypted_secret_share,
             *private_key,
@@ -1760,7 +1910,7 @@ impl Participant<Ristretto255Group> {
         let a2 = dleq.get_a2();
         DLEQ::<Ristretto255Group>::append_transcript_hash(
             self.group.as_ref(),
-            &public_key,
+            &combined_public_key,
             encrypted_secret_share,
             &a1,
             &a2,
@@ -1790,12 +1940,15 @@ impl Participant<Ristretto255Group> {
         &self,
         sharebox: &ShareBox<Ristretto255Group>,
         distribution_sharebox: &DistributionSharesBox<Ristretto255Group>,
-        publickey: &RistrettoPoint,
+        publickey: &PublicKey<Ristretto255Group>,
     ) -> bool {
-        let main_gen = self.group.generator();
+        let main_gen = self
+            .group
+            .mul(&self.group.generator(), &self.group.blinding_generator());
+        let combined_public_key = publickey.combined(self.group.as_ref());
 
         // Get encrypted share from distribution box (serialize key for HashMap lookup)
-        let publickey_bytes = self.group.element_to_bytes(publickey);
+        let publickey_bytes = publickey.to_bytes(self.group.as_ref());
         let encrypted_share =
             match distribution_sharebox.shares.get(&publickey_bytes) {
                 Some(s) => s,
@@ -1805,7 +1958,7 @@ impl Participant<Ristretto255Group> {
         // Verify share DLEQ proof through shared verifier object path.
         let mut dleq = DLEQ::<Ristretto255Group>::new(self.group.clone());
         dleq.g1 = main_gen;
-        dleq.h1 = *publickey;
+        dleq.h1 = combined_public_key;
         dleq.g2 = sharebox.share;
         dleq.h2 = *encrypted_share;
         dleq.c = Some(sharebox.challenge);
@@ -1828,19 +1981,24 @@ impl Participant<Ristretto255Group> {
         &self,
         distribute_sharesbox: &DistributionSharesBox<Ristretto255Group>,
     ) -> bool {
-        let subgroup_gen = self.group.subgroup_generator();
+        let commitment_gen = self.group.subgroup_generator();
+        let commitment_blinding_gen = self.group.subgroup_blinding_generator();
         let mut challenge_hasher = Sha256::new();
 
         // Verify each participant's encrypted share and accumulate hash
         for publickey in &distribute_sharesbox.publickeys {
-            let publickey_bytes = self.group.element_to_bytes(publickey);
+            let publickey_bytes = publickey.to_bytes(self.group.as_ref());
             let position = distribute_sharesbox.positions.get(&publickey_bytes);
             let response = distribute_sharesbox.responses.get(&publickey_bytes);
+            let blinding_response = distribute_sharesbox
+                .blinding_responses
+                .get(&publickey_bytes);
             let encrypted_share =
                 distribute_sharesbox.shares.get(&publickey_bytes);
 
             if position.is_none()
                 || response.is_none()
+                || blinding_response.is_none()
                 || encrypted_share.is_none()
             {
                 return false;
@@ -1848,6 +2006,7 @@ impl Participant<Ristretto255Group> {
 
             let position = *position.unwrap();
             let response = response.unwrap();
+            let blinding_response = blinding_response.unwrap();
             let encrypted_share = encrypted_share.unwrap();
 
             // Calculate X_i = Σ_j (position^j) * C_j using EC operations
@@ -1863,15 +2022,16 @@ impl Participant<Ristretto255Group> {
                 exponent = self.group.scalar_mul(&exponent, &pos_scalar);
             }
 
-            // Verify DLEQ proof for this participant via shared helper and
-            // append transcript.
-            let _ = DLEQ::<Ristretto255Group>::verifier_update_hash(
+            let _ = DLEQ2::<Ristretto255Group>::verifier_update_hash(
                 self.group.as_ref(),
-                &subgroup_gen,
+                &commitment_gen,
+                &commitment_blinding_gen,
+                publickey.primary(),
+                publickey.secondary(),
                 &x_val,
-                publickey,
                 encrypted_share,
                 response,
+                blinding_response,
                 &distribute_sharesbox.challenge,
                 &mut challenge_hasher,
             );
@@ -1907,7 +2067,7 @@ impl Participant<Ristretto255Group> {
         let mut shares: HashMap<i64, RistrettoPoint> = HashMap::new();
         for share_box in share_boxes.iter() {
             let publickey_bytes =
-                self.group.element_to_bytes(&share_box.publickey);
+                share_box.publickey.to_bytes(self.group.as_ref());
             let position =
                 distribute_share_box.positions.get(&publickey_bytes)?;
             shares.insert(*position, share_box.share);

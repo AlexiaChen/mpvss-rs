@@ -26,7 +26,6 @@
 //! - **Cofactor (h)**: 1 (prime-order group)
 //! - **Encoding**: 32-byte compressed points
 
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
@@ -44,6 +43,10 @@ use crate::group::Group;
 #[derive(Debug, Clone)]
 pub struct Ristretto255Group {
     order: BigInt,
+    generator: RistrettoPoint,
+    blinding_generator: RistrettoPoint,
+    commitment_generator: RistrettoPoint,
+    commitment_blinding_generator: RistrettoPoint,
 }
 
 impl Ristretto255Group {
@@ -59,7 +62,35 @@ impl Ristretto255Group {
         ];
         let order = BigInt::from_bytes_be(num_bigint::Sign::Plus, &order_bytes);
 
-        Arc::new(Ristretto255Group { order })
+        // Paper reference: Section 1 system parameters.  The protocol assumes
+        // independent generators `g, h, G, H`.  Ristretto's uniform mapping
+        // lets us derive each base from a separate domain label.
+        Arc::new(Ristretto255Group {
+            order,
+            generator: Self::hash_to_point(
+                b"mpvss-rs/ristretto255/main-generator/G",
+            ),
+            blinding_generator: Self::hash_to_point(
+                b"mpvss-rs/ristretto255/main-generator/H",
+            ),
+            commitment_generator: Self::hash_to_point(
+                b"mpvss-rs/ristretto255/commitment-generator/g",
+            ),
+            commitment_blinding_generator: Self::hash_to_point(
+                b"mpvss-rs/ristretto255/commitment-generator/h",
+            ),
+        })
+    }
+
+    fn hash_to_point(domain: &[u8]) -> RistrettoPoint {
+        // Domain-separated hash-to-group for the four bases used by the
+        // Pedersen commitments and the `G^s1 H^s2` shared secret.
+        let mut hasher = Sha512::new();
+        hasher.update(domain);
+        let digest = hasher.finalize();
+        let mut uniform = [0_u8; 64];
+        uniform.copy_from_slice(&digest[..]);
+        RistrettoPoint::from_uniform_bytes(&uniform)
     }
 
     /// Get the group order as BigInt for use in modular arithmetic
@@ -146,12 +177,20 @@ impl Group for Ristretto255Group {
     }
 
     fn generator(&self) -> Self::Element {
-        RISTRETTO_BASEPOINT_POINT
+        self.generator
+    }
+
+    fn blinding_generator(&self) -> Self::Element {
+        self.blinding_generator
     }
 
     fn subgroup_generator(&self) -> Self::Element {
         // For prime-order groups, main generator and subgroup generator are the same
-        RISTRETTO_BASEPOINT_POINT
+        self.commitment_generator
+    }
+
+    fn subgroup_blinding_generator(&self) -> Self::Element {
+        self.commitment_blinding_generator
     }
 
     fn identity(&self) -> Self::Element {
@@ -225,20 +264,25 @@ impl Group for Ristretto255Group {
     }
 
     fn generate_private_key(&self) -> Self::Scalar {
-        // Generate random bytes using rand 0.5's thread_rng
-        // Note: curve25519-dalek requires rand_core 0.6+, but we use rand 0.5
-        // So we manually generate random bytes
-        let mut bytes = [0u8; 32];
-        for byte in &mut bytes {
-            *byte = rand::random::<u8>();
+        loop {
+            // Generate random bytes using rand 0.5's thread_rng
+            // Note: curve25519-dalek requires rand_core 0.6+, but we use rand 0.5
+            // So we manually generate random bytes
+            let mut bytes = [0u8; 32];
+            for byte in &mut bytes {
+                *byte = rand::random::<u8>();
+            }
+            // from_bytes_mod_order performs modular reduction modulo group order
+            let scalar = Scalar::from_bytes_mod_order(bytes);
+            if scalar != Scalar::ZERO {
+                return scalar;
+            }
         }
-        // from_bytes_mod_order performs modular reduction modulo group order
-        Scalar::from_bytes_mod_order(bytes)
     }
 
     fn generate_public_key(&self, private_key: &Self::Scalar) -> Self::Element {
         // Public key = private_key * G (scalar multiplication)
-        RISTRETTO_BASEPOINT_POINT * private_key
+        self.exp(&self.generator, private_key)
     }
 
     fn scalar_mul(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar {

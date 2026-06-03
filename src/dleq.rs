@@ -162,6 +162,124 @@ pub struct DLEQ<G: Group> {
     pub group: Arc<G>,
 }
 
+/// Generalized Chaum-Pedersen proof for two witnesses.
+///
+/// Proves knowledge of `(x1, x2)` such that
+/// `X = g1^x1 * g2^x2` and `Y = h1^x1 * h2^x2`.
+///
+/// Paper reference: Section 4, generalized DLEQ and its Fiat-Shamir
+/// signature `Sign(X, Y, g1, g2, h1, h2)`.  The distribution proof in Section
+/// 5.1 uses this with `(x1, x2) = (f(i), g(i))`.
+#[derive(Debug, Clone)]
+pub struct DLEQ2<G: Group> {
+    _marker: std::marker::PhantomData<G>,
+}
+
+impl<G: Group> DLEQ2<G> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn prover_commitments(
+        group: &G,
+        g1: &G::Element,
+        g2: &G::Element,
+        h1: &G::Element,
+        h2: &G::Element,
+        w1: &G::Scalar,
+        w2: &G::Scalar,
+    ) -> (G::Element, G::Element) {
+        // Paper reference: Section 4, prover sends
+        // `X' = g1^s g2^t` and `Y' = h1^s h2^t`.
+        let a1 = group.mul(&group.exp(g1, w1), &group.exp(g2, w2));
+        let a2 = group.mul(&group.exp(h1, w1), &group.exp(h2, w2));
+        (a1, a2)
+    }
+
+    pub fn responses(
+        group: &G,
+        w1: &G::Scalar,
+        w2: &G::Scalar,
+        x1: &G::Scalar,
+        x2: &G::Scalar,
+        c: &G::Scalar,
+    ) -> (G::Scalar, G::Scalar) {
+        // Fiat-Shamir response form used by this crate follows the existing
+        // DLEQ convention `r = witness - challenge * secret`.  Algebraically
+        // the verifier reconstructs the same commitments as the paper's
+        // `r = c*x + s` convention after moving terms to the other side.
+        let x1_c = group.scalar_mul(x1, c);
+        let x2_c = group.scalar_mul(x2, c);
+        (group.scalar_sub(w1, &x1_c), group.scalar_sub(w2, &x2_c))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn verifier_commitments(
+        group: &G,
+        g1: &G::Element,
+        g2: &G::Element,
+        h1: &G::Element,
+        h2: &G::Element,
+        x: &G::Element,
+        y: &G::Element,
+        r1: &G::Scalar,
+        r2: &G::Scalar,
+        c: &G::Scalar,
+    ) -> (G::Element, G::Element) {
+        // Reconstruct the Fiat-Shamir commitments from `(r1, r2, c)`:
+        // `a1 = g1^r1 g2^r2 X^c`, `a2 = h1^r1 h2^r2 Y^c`.
+        let g_part = group.mul(&group.exp(g1, r1), &group.exp(g2, r2));
+        let a1 = group.mul(&g_part, &group.exp(x, c));
+
+        let h_part = group.mul(&group.exp(h1, r1), &group.exp(h2, r2));
+        let a2 = group.mul(&h_part, &group.exp(y, c));
+
+        (a1, a2)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn append_transcript_hash(
+        group: &G,
+        g1: &G::Element,
+        g2: &G::Element,
+        h1: &G::Element,
+        h2: &G::Element,
+        x: &G::Element,
+        y: &G::Element,
+        a1: &G::Element,
+        a2: &G::Element,
+        hasher: &mut Sha256,
+    ) {
+        Verifier::update_framed_hash(hasher, &group.element_to_bytes(g1));
+        Verifier::update_framed_hash(hasher, &group.element_to_bytes(g2));
+        Verifier::update_framed_hash(hasher, &group.element_to_bytes(h1));
+        Verifier::update_framed_hash(hasher, &group.element_to_bytes(h2));
+        Verifier::update_framed_hash(hasher, &group.element_to_bytes(x));
+        Verifier::update_framed_hash(hasher, &group.element_to_bytes(y));
+        Verifier::update_framed_hash(hasher, &group.element_to_bytes(a1));
+        Verifier::update_framed_hash(hasher, &group.element_to_bytes(a2));
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn verifier_update_hash(
+        group: &G,
+        g1: &G::Element,
+        g2: &G::Element,
+        h1: &G::Element,
+        h2: &G::Element,
+        x: &G::Element,
+        y: &G::Element,
+        r1: &G::Scalar,
+        r2: &G::Scalar,
+        c: &G::Scalar,
+        hasher: &mut Sha256,
+    ) -> (G::Element, G::Element) {
+        let (a1, a2) =
+            Self::verifier_commitments(group, g1, g2, h1, h2, x, y, r1, r2, c);
+        Self::append_transcript_hash(
+            group, g1, g2, h1, h2, x, y, &a1, &a2, hasher,
+        );
+        (a1, a2)
+    }
+}
+
 impl<G: Group> DLEQ<G> {
     /// Create a new DLEQ proof structure.
     pub fn new(group: Arc<G>) -> Self
@@ -392,9 +510,8 @@ mod tests {
         dleq.c = Some(BigInt::from(127997));
 
         let r = dleq.get_r().unwrap();
-        // The response is computed as (w - alpha*c) mod order
-        // where order is q-1 for the MODP group
-        let order = group.order();
+        // The response is computed in the prime-order subgroup scalar field.
+        let order = group.subgroup_order();
         let expected_r = (BigInt::from(81647)
             - BigInt::from(163027) * BigInt::from(127997))
         .mod_floor(order);

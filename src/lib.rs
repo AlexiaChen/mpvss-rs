@@ -31,10 +31,10 @@ pub mod group;
 pub mod groups;
 
 // Public API exports
-pub use dleq::DLEQ;
+pub use dleq::{DLEQ, DLEQ2};
 pub use mpvss::PVSS;
 pub use participant::{ModpParticipant, Participant};
-pub use sharebox::{DistributionSharesBox, ShareBox};
+pub use sharebox::{DistributionSharesBox, PublicKey, ShareBox};
 
 // Type aliases for convenience
 /// Type alias for Participant with Secp256k1Group (elliptic curve cryptography)

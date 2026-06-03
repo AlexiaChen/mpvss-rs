@@ -33,8 +33,12 @@ pub struct ModpGroup {
     g: BigInt,
     /// Main generator (value 2)
     G: BigInt,
+    /// Independent main generator for Pedersen-style masking
+    H: BigInt,
     /// Generator of the large prime-order subgroup (G squared)
     g_gen: BigInt,
+    /// Independent generator of the large prime-order subgroup
+    h_gen: BigInt,
     /// Cached q - 1 (group order)
     q_minus_1: BigInt,
 }
@@ -58,12 +62,36 @@ impl ModpGroup {
         .unwrap();
         let g: BigUint = (q.clone() - BigUint::one()) / BigUint::from(2_u64);
 
+        let q_bigint = q.to_bigint().unwrap();
+        // Paper reference: Section 1 system parameters.  The improved scheme
+        // assumes independent generators `g, h, G, H` with no known discrete
+        // log relation between any pair.  Domain-separated hash-to-subgroup
+        // generation gives deterministic parameters without reusing one base
+        // for the Pedersen hiding base.
+        let main_gen = Self::hash_to_subgroup_generator(
+            &q_bigint,
+            b"mpvss-rs/modp/main-generator/G",
+        );
+        let main_blinding_gen = Self::hash_to_subgroup_generator(
+            &q_bigint,
+            b"mpvss-rs/modp/main-generator/H",
+        );
+        let commitment_gen = Self::hash_to_subgroup_generator(
+            &q_bigint,
+            b"mpvss-rs/modp/commitment-generator/g",
+        );
+        let commitment_blinding_gen = Self::hash_to_subgroup_generator(
+            &q_bigint,
+            b"mpvss-rs/modp/commitment-generator/h",
+        );
+
         Arc::new(ModpGroup {
             q: q.to_bigint().unwrap(),
             g: g.to_bigint().unwrap(),
-            G: BigInt::from(2),
-            g_gen: BigInt::from(2)
-                .modpow(&BigInt::from(2), &q.to_bigint().unwrap()),
+            G: main_gen,
+            H: main_blinding_gen,
+            g_gen: commitment_gen,
+            h_gen: commitment_blinding_gen,
             q_minus_1: q.to_bigint().unwrap() - BigInt::one(),
         })
     }
@@ -73,14 +101,60 @@ impl ModpGroup {
         let q: BigUint = Generator::safe_prime(length as usize);
         let g: BigUint = (q.clone() - BigUint::one()) / BigUint::from(2_u64);
 
+        let q_bigint = q.to_bigint().unwrap();
+        // Same generator derivation as `new()`: four domain-separated bases
+        // correspond to the paper's `g, h, G, H` parameters.
+        let main_gen = Self::hash_to_subgroup_generator(
+            &q_bigint,
+            b"mpvss-rs/modp/main-generator/G",
+        );
+        let main_blinding_gen = Self::hash_to_subgroup_generator(
+            &q_bigint,
+            b"mpvss-rs/modp/main-generator/H",
+        );
+        let commitment_gen = Self::hash_to_subgroup_generator(
+            &q_bigint,
+            b"mpvss-rs/modp/commitment-generator/g",
+        );
+        let commitment_blinding_gen = Self::hash_to_subgroup_generator(
+            &q_bigint,
+            b"mpvss-rs/modp/commitment-generator/h",
+        );
+
         Arc::new(ModpGroup {
             q: q.to_bigint().unwrap(),
             g: g.to_bigint().unwrap(),
-            G: BigInt::from(2),
-            g_gen: BigInt::from(2)
-                .modpow(&BigInt::from(2), &q.to_bigint().unwrap()),
+            G: main_gen,
+            H: main_blinding_gen,
+            g_gen: commitment_gen,
+            h_gen: commitment_blinding_gen,
             q_minus_1: q.to_bigint().unwrap() - BigInt::one(),
         })
+    }
+
+    fn hash_to_subgroup_generator(modulus: &BigInt, domain: &[u8]) -> BigInt {
+        // Hash a domain label into the quadratic-residue subgroup by squaring
+        // the candidate modulo the safe prime.  This keeps MODP operations in
+        // the prime-order subgroup required by the paper's `G_q` notation.
+        let modulus_uint = modulus.to_biguint().unwrap();
+        for counter in 0_u64.. {
+            let mut hasher = Sha256::new();
+            hasher.update(domain);
+            hasher.update(counter.to_be_bytes());
+            let digest = hasher.finalize();
+            let candidate = BigUint::from_bytes_be(&digest[..]) % &modulus_uint;
+            if candidate <= BigUint::one() {
+                continue;
+            }
+            let elem = candidate
+                .to_bigint()
+                .unwrap()
+                .modpow(&BigInt::from(2), modulus);
+            if elem > BigInt::one() {
+                return elem;
+            }
+        }
+        unreachable!("counter loop must find a subgroup generator")
     }
 
     /// Get the safe prime modulus q
@@ -110,9 +184,17 @@ impl Group for ModpGroup {
         self.G.clone()
     }
 
+    fn blinding_generator(&self) -> Self::Element {
+        self.H.clone()
+    }
+
     fn subgroup_generator(&self) -> Self::Element {
         // Use the generator of the large prime-order subgroup (order = g)
         self.g_gen.clone()
+    }
+
+    fn subgroup_blinding_generator(&self) -> Self::Element {
+        self.h_gen.clone()
     }
 
     fn identity(&self) -> Self::Element {
@@ -132,7 +214,7 @@ impl Group for ModpGroup {
     }
 
     fn scalar_inverse(&self, x: &Self::Scalar) -> Option<Self::Scalar> {
-        crate::util::Util::mod_inverse(x, &self.q_minus_1)
+        crate::util::Util::mod_inverse(x, &self.g)
     }
 
     fn element_inverse(&self, x: &Self::Element) -> Option<Self::Element> {
@@ -163,11 +245,10 @@ impl Group for ModpGroup {
         let mut rng = rand::thread_rng();
         loop {
             let privkey: BigInt = rng
-                .gen_biguint_below(&self.q.to_biguint().unwrap())
+                .gen_biguint_below(&self.g.to_biguint().unwrap())
                 .to_bigint()
                 .unwrap();
-            // Private key must be coprime to (q-1) for modular inverse during reconstruction
-            if privkey.gcd(&self.q_minus_1) == BigInt::one() {
+            if privkey > BigInt::zero() {
                 return privkey;
             }
         }
@@ -178,11 +259,11 @@ impl Group for ModpGroup {
     }
 
     fn scalar_mul(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar {
-        (a * b) % self.order()
+        (a * b) % self.subgroup_order()
     }
 
     fn scalar_sub(&self, a: &Self::Scalar, b: &Self::Scalar) -> Self::Scalar {
-        let order = self.order();
+        let order = self.subgroup_order();
         let diff = a - b;
         if diff < BigInt::zero() {
             diff + order
